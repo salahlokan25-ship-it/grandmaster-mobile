@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Search, Bell, Trophy, Users, MessageSquare, ChevronRight } from 'lucide-react';
-import { PageContainer, PageHeader } from '@/components/layout/PageContainer';
-import { BottomNav, TabId } from '@/components/layout/BottomNav';
-import { BackButton, IconButton } from '@/components/ui/IconButton';
+import { ArrowLeft, Search, Bell, Trophy, Users, Play } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import BottomNav from '@/components/layout/BottomNav';
 import { ChessAvatar } from '@/components/ui/ChessAvatar';
 import { cn } from '@/lib/utils';
 import chessHero from '@/assets/chess-hero.jpg';
@@ -16,23 +15,25 @@ const leaderboardData = [
   { rank: 4, username: 'KnightRider', rating: 2750 },
 ];
 
-interface CommunityPageProps {
-  onBack?: () => void;
-}
-
-export function CommunityPage({ onBack }: CommunityPageProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('clubs');
+export function CommunityPage() {
+  const navigate = useNavigate();
   const [leaderboardTab, setLeaderboardTab] = useState('Global');
 
   return (
-    <PageContainer className="pb-24">
-      <PageHeader
-        title="Community"
-        leftAction={<BackButton onClick={onBack} />}
-        rightAction={<IconButton icon={Bell} badge={1} variant="ghost" />}
-      />
+    <div className="min-h-screen bg-background pb-24">
+      {/* Header */}
+      <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-background/95 backdrop-blur-lg border-b border-border/50">
+        <button onClick={() => navigate('/')} className="w-10 h-10 flex items-center justify-center rounded-full bg-secondary/50">
+          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+        </button>
+        <h1 className="text-lg font-semibold text-foreground">Community</h1>
+        <button className="relative w-10 h-10 flex items-center justify-center">
+          <Bell className="w-5 h-5 text-muted-foreground" />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+        </button>
+      </header>
 
-      <div className="px-4 space-y-5">
+      <div className="px-4 py-4 space-y-5">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -44,20 +45,18 @@ export function CommunityPage({ onBack }: CommunityPageProps) {
         </div>
 
         {/* Find Your Tribe Banner */}
-        <div className="chess-card overflow-hidden relative">
-          <img
-            src={chessHero}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-30"
-          />
+        <div className="bg-card rounded-2xl overflow-hidden relative border border-border/50">
+          <img src={chessHero} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
           <div className="relative p-5">
             <h2 className="text-2xl font-bold text-foreground">Find your tribe</h2>
-            <p className="text-muted-foreground mt-1">
-              Compete in leagues or start your own dynasty.
-            </p>
+            <p className="text-muted-foreground mt-1">Compete in leagues or start your own dynasty.</p>
             <div className="flex gap-3 mt-4">
-              <button className="chess-button-primary">Join Club</button>
-              <button className="chess-button-secondary">Create</button>
+              <button className="px-6 py-3 rounded-full font-semibold text-primary-foreground bg-primary">
+                Join Club
+              </button>
+              <button className="px-6 py-3 rounded-full font-medium border border-border bg-secondary text-secondary-foreground">
+                Create
+              </button>
             </div>
           </div>
         </div>
@@ -66,10 +65,10 @@ export function CommunityPage({ onBack }: CommunityPageProps) {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-foreground">Upcoming Events</h2>
-            <button className="chess-link">View All</button>
+            <button className="text-primary font-medium text-sm">View All</button>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-            <div className="chess-card p-4 min-w-[200px] flex-shrink-0">
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
+            <div className="bg-card rounded-2xl p-4 min-w-[200px] flex-shrink-0 border border-border/50">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-10 h-10 rounded-full bg-amber-600/20 flex items-center justify-center">
                   <Trophy className="w-5 h-5 text-amber-500" />
@@ -89,7 +88,7 @@ export function CommunityPage({ onBack }: CommunityPageProps) {
                 <span className="text-xs text-muted-foreground ml-1">+124 joined</span>
               </div>
             </div>
-            <div className="chess-card p-4 min-w-[200px] flex-shrink-0">
+            <div className="bg-card rounded-2xl p-4 min-w-[200px] flex-shrink-0 border border-border/50">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-10 h-10 rounded-full bg-green-600/20 flex items-center justify-center">
                   <Users className="w-5 h-5 text-green-500" />
@@ -160,7 +159,7 @@ export function CommunityPage({ onBack }: CommunityPageProps) {
         </section>
 
         {/* Club Chat */}
-        <section className="chess-card p-4">
+        <section className="bg-card rounded-2xl p-4 border border-border/50">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-foreground">Club Chat</h3>
             <span className="px-2 py-0.5 bg-primary text-primary-foreground text-xs font-bold rounded">
@@ -172,9 +171,7 @@ export function CommunityPage({ onBack }: CommunityPageProps) {
               <ChessAvatar size="sm" fallback="A" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">Alex_Chess</p>
-                <p className="text-sm text-muted-foreground">
-                  Anyone up for a quick 5min game? 🎮
-                </p>
+                <p className="text-sm text-muted-foreground">Anyone up for a quick 5min game? 🎮</p>
                 <p className="text-xs text-primary mt-1">I'm down! Send invite.</p>
                 <p className="text-xs text-muted-foreground mt-1">2 mins ago</p>
               </div>
@@ -186,7 +183,9 @@ export function CommunityPage({ onBack }: CommunityPageProps) {
         </section>
       </div>
 
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} variant="community" />
-    </PageContainer>
+      <BottomNav variant="community" />
+    </div>
   );
 }
+
+export default CommunityPage;

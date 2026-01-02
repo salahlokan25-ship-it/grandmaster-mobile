@@ -1,38 +1,32 @@
-import { useState } from 'react';
-import { ArrowLeft, Search, BookOpen, Flame, Star, Shield } from 'lucide-react';
-import { PageContainer, PageHeader } from '@/components/layout/PageContainer';
-import { BottomNav, TabId } from '@/components/layout/BottomNav';
-import { BackButton, IconButton } from '@/components/ui/IconButton';
-import { ProgressBar } from '@/components/ui/ProgressBar';
-import { FeatureCard } from '@/components/ui/Cards';
-import { cn } from '@/lib/utils';
+import { ArrowLeft, Search, BookOpen, Flame, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import BottomNav from '@/components/layout/BottomNav';
 import chessHero from '@/assets/chess-hero.jpg';
 import chessEndgame from '@/assets/chess-endgame.jpg';
 import chessKnight from '@/assets/chess-knight.jpg';
+import { useState } from 'react';
+import { cn } from '@/lib/utils';
 
 const categories = ['Overview', 'Openings', 'Tactics', 'Strategy', 'Endgame'];
 
-interface LearningPageProps {
-  onBack?: () => void;
-}
-
-export function LearningPage({ onBack }: LearningPageProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('learn');
+export function LearningPage() {
+  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState('Overview');
 
   return (
-    <PageContainer className="pb-24">
-      <PageHeader
-        title="Learning Center"
-        leftAction={<BackButton onClick={onBack} />}
-        rightAction={
-          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-            <BookOpen className="w-5 h-5 text-primary" />
-          </div>
-        }
-      />
+    <div className="min-h-screen bg-background pb-24">
+      {/* Header */}
+      <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-background/95 backdrop-blur-lg border-b border-border/50">
+        <button onClick={() => navigate('/')} className="w-10 h-10 flex items-center justify-center rounded-full bg-secondary/50">
+          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+        </button>
+        <h1 className="text-lg font-semibold text-foreground">Learning Center</h1>
+        <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+          <BookOpen className="w-5 h-5 text-primary" />
+        </div>
+      </header>
 
-      <div className="px-4 space-y-5">
+      <div className="px-4 py-4 space-y-5">
         {/* Greeting */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Good Evening, Alex</h1>
@@ -45,8 +39,8 @@ export function LearningPage({ onBack }: LearningPageProps) {
             <span className="font-medium text-foreground">Daily Goal</span>
             <span className="text-sm font-medium text-primary">12/20 Tactics</span>
           </div>
-          <div className="chess-progress-bar">
-            <div className="chess-progress-fill" style={{ width: '60%' }} />
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="h-full rounded-full bg-primary" style={{ width: '60%' }} />
           </div>
         </div>
 
@@ -61,7 +55,7 @@ export function LearningPage({ onBack }: LearningPageProps) {
         </div>
 
         {/* Categories */}
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
           {categories.map((cat) => (
             <button
               key={cat}
@@ -81,23 +75,15 @@ export function LearningPage({ onBack }: LearningPageProps) {
         {/* Continue Learning */}
         <section>
           <h2 className="text-lg font-bold text-foreground mb-3">Continue Learning</h2>
-          <div className="chess-card overflow-hidden">
+          <div className="bg-card rounded-2xl overflow-hidden border border-border/50">
             <div className="flex">
-              <img
-                src={chessHero}
-                alt="Sicilian Defense"
-                className="w-1/3 h-32 object-cover"
-              />
+              <img src={chessHero} alt="Sicilian Defense" className="w-1/3 h-32 object-cover" />
               <div className="flex-1 p-4">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-bold text-foreground">The Sicilian Defense</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Master the counter-attack style.
-                    </p>
-                  </div>
+                  <h3 className="font-bold text-foreground">The Sicilian Defense</h3>
                   <span className="text-xs font-semibold text-primary uppercase">In Progress</span>
                 </div>
+                <p className="text-sm text-muted-foreground mt-1">Master the counter-attack style.</p>
                 <div className="flex items-center gap-2 mt-3">
                   <span className="px-2 py-0.5 rounded bg-amber-600/20 text-amber-400 text-xs font-medium">
                     Intermediate
@@ -113,7 +99,7 @@ export function LearningPage({ onBack }: LearningPageProps) {
         </section>
 
         {/* Daily Puzzle Drill */}
-        <section className="chess-card p-4">
+        <section className="bg-card rounded-2xl p-4 border border-border/50">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-bold text-foreground">Daily Puzzle Drill</h3>
@@ -134,7 +120,9 @@ export function LearningPage({ onBack }: LearningPageProps) {
                 <p className="text-xl font-bold text-foreground">1200</p>
               </div>
             </div>
-            <button className="chess-button-primary">Start Drill</button>
+            <button className="px-6 py-3 rounded-full font-semibold text-primary-foreground bg-primary">
+              Start Drill
+            </button>
           </div>
         </section>
 
@@ -142,10 +130,10 @@ export function LearningPage({ onBack }: LearningPageProps) {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-foreground">Recommended For You</h2>
-            <button className="chess-link">View All</button>
+            <button className="text-primary font-medium text-sm">View All</button>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-            <div className="chess-card overflow-hidden w-44 flex-shrink-0">
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
+            <div className="bg-card rounded-2xl overflow-hidden w-44 flex-shrink-0 border border-border/50">
               <div className="relative h-28">
                 <img src={chessEndgame} alt="Endgame" className="w-full h-full object-cover" />
                 <span className="absolute top-2 left-2 px-2 py-0.5 bg-green-600 text-white text-xs font-semibold rounded">
@@ -160,7 +148,7 @@ export function LearningPage({ onBack }: LearningPageProps) {
                 </div>
               </div>
             </div>
-            <div className="chess-card overflow-hidden w-44 flex-shrink-0">
+            <div className="bg-card rounded-2xl overflow-hidden w-44 flex-shrink-0 border border-border/50">
               <div className="relative h-28">
                 <img src={chessKnight} alt="Tactics" className="w-full h-full object-cover" />
                 <span className="absolute top-2 left-2 px-2 py-0.5 bg-blue-600 text-white text-xs font-semibold rounded">
@@ -179,7 +167,9 @@ export function LearningPage({ onBack }: LearningPageProps) {
         </section>
       </div>
 
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} variant="learn" />
-    </PageContainer>
+      <BottomNav variant="learn" />
+    </div>
   );
 }
+
+export default LearningPage;

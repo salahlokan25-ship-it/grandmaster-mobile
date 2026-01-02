@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, Zap, Clock, Timer, Search, UserPlus, ChevronRight } from 'lucide-react';
-import { PageContainer, PageHeader } from '@/components/layout/PageContainer';
-import { BackButton } from '@/components/ui/IconButton';
+import { useNavigate } from 'react-router-dom';
 import { ChessAvatar } from '@/components/ui/ChessAvatar';
-import { useGameStore } from '@/stores/gameStore';
 import { TimeControl } from '@/types/chess';
 import { cn } from '@/lib/utils';
 
@@ -13,23 +11,21 @@ const timeControls: { id: TimeControl; label: string; time: string; icon: typeof
   { id: 'rapid', label: 'Rapid', time: '10 min', icon: Timer, color: 'text-green-500' },
 ];
 
-interface PlayOnlinePageProps {
-  onBack?: () => void;
-  onFindOpponent?: () => void;
-}
-
-export function PlayOnlinePage({ onBack, onFindOpponent }: PlayOnlinePageProps) {
-  const { timeControl, setTimeControl } = useGameStore();
-  const [selectedTime, setSelectedTime] = useState<TimeControl>(timeControl);
-  const [ratingRange, setRatingRange] = useState({ min: 1250, max: 1650 });
+export function PlayOnlinePage() {
+  const navigate = useNavigate();
+  const [selectedTime, setSelectedTime] = useState<TimeControl>('blitz');
   const userRating = 1450;
 
   return (
-    <PageContainer className="pb-8">
-      <PageHeader
-        title="Play Online"
-        leftAction={<BackButton onClick={onBack} />}
-      />
+    <div className="min-h-screen bg-background pb-8">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-3">
+        <button onClick={() => navigate('/')} className="w-10 h-10 flex items-center justify-center rounded-full bg-secondary/50">
+          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+        </button>
+        <h1 className="text-lg font-semibold text-foreground">Play Online</h1>
+        <div className="w-10" />
+      </header>
 
       <div className="px-4 space-y-6">
         {/* Select Mode */}
@@ -43,12 +39,12 @@ export function PlayOnlinePage({ onBack, onFindOpponent }: PlayOnlinePageProps) 
                 key={tc.id}
                 onClick={() => setSelectedTime(tc.id)}
                 className={cn(
-                  'chess-card p-4 flex flex-col items-center text-center relative transition-all',
-                  selectedTime === tc.id && 'ring-2 ring-primary'
+                  'bg-card rounded-2xl p-4 flex flex-col items-center text-center relative transition-all border',
+                  selectedTime === tc.id ? 'border-primary ring-2 ring-primary' : 'border-border/50'
                 )}
               >
                 {tc.id === 'blitz' && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-primary text-primary-foreground text-xxs font-bold rounded uppercase">
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded uppercase">
                     Popular
                   </span>
                 )}
@@ -82,27 +78,21 @@ export function PlayOnlinePage({ onBack, onFindOpponent }: PlayOnlinePageProps) 
             </span>
           </div>
 
-          <div className="chess-card p-4">
+          <div className="bg-card rounded-2xl p-4 border border-border/50">
             <div className="flex items-center justify-between mb-4">
               <span className="text-muted-foreground">Range</span>
               <span className="font-bold text-foreground">-200 / +200</span>
             </div>
 
             <div className="relative h-2 bg-secondary rounded-full">
-              <div
-                className="absolute h-full bg-primary rounded-full"
-                style={{
-                  left: '20%',
-                  right: '30%',
-                }}
-              />
+              <div className="absolute h-full bg-primary rounded-full" style={{ left: '20%', right: '30%' }} />
               <div className="absolute top-1/2 -translate-y-1/2 left-[20%] w-5 h-5 rounded-full bg-primary border-2 border-background" />
               <div className="absolute top-1/2 -translate-y-1/2 right-[30%] w-5 h-5 rounded-full bg-primary border-2 border-background" />
             </div>
 
             <div className="flex justify-between mt-3">
-              <span className="text-sm text-muted-foreground">{ratingRange.min}</span>
-              <span className="text-sm text-muted-foreground">{ratingRange.max}</span>
+              <span className="text-sm text-muted-foreground">1250</span>
+              <span className="text-sm text-muted-foreground">1650</span>
             </div>
           </div>
         </section>
@@ -126,18 +116,21 @@ export function PlayOnlinePage({ onBack, onFindOpponent }: PlayOnlinePageProps) 
         {/* Action Buttons */}
         <div className="space-y-3 pt-4">
           <button
-            onClick={onFindOpponent}
-            className="w-full chess-button-primary flex items-center justify-center gap-2 py-4 text-lg"
+            onClick={() => navigate('/game')}
+            className="w-full py-4 rounded-full font-semibold text-lg text-primary-foreground bg-primary flex items-center justify-center gap-2"
+            style={{ boxShadow: '0 0 20px rgba(232, 90, 0, 0.4)' }}
           >
             <Search className="w-5 h-5" />
             Find Opponent
           </button>
-          <button className="w-full chess-button-secondary flex items-center justify-center gap-2 py-4">
+          <button className="w-full py-4 rounded-full font-medium border border-border bg-secondary text-foreground flex items-center justify-center gap-2">
             <UserPlus className="w-5 h-5" />
             Challenge a Friend
           </button>
         </div>
       </div>
-    </PageContainer>
+    </div>
   );
 }
+
+export default PlayOnlinePage;
