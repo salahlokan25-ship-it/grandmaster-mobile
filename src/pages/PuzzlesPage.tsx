@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { Flame, Play, ChevronRight, Star, Sparkles, Trophy } from 'lucide-react';
-import { PageContainer } from '@/components/layout/PageContainer';
-import { BottomNav, TabId } from '@/components/layout/BottomNav';
+import { Flame, Play, Star, Sparkles, Trophy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import BottomNav from '@/components/layout/BottomNav';
 import { ChessAvatar } from '@/components/ui/ChessAvatar';
 import { cn } from '@/lib/utils';
 import chessHero from '@/assets/chess-hero.jpg';
@@ -15,11 +14,11 @@ const leaderboardData = [
 ];
 
 export function PuzzlesPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('puzzles');
+  const navigate = useNavigate();
   const streak = 12;
 
   return (
-    <PageContainer className="pb-24">
+    <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-4">
         <h1 className="text-xl font-bold text-foreground">Puzzles & Training</h1>
@@ -31,9 +30,9 @@ export function PuzzlesPage() {
 
       <div className="px-4 space-y-6">
         {/* Daily Challenge */}
-        <section className="chess-card overflow-hidden">
+        <section className="bg-card rounded-2xl overflow-hidden border border-border/50">
           <div className="relative">
-            <span className="absolute top-3 left-3 px-2 py-1 bg-primary text-primary-foreground text-xs font-bold rounded">
+            <span className="absolute top-3 left-3 px-2 py-1 bg-primary text-primary-foreground text-xs font-bold rounded z-10">
               DAILY CHALLENGE
             </span>
             <img src={chessPiecesLight} alt="Daily puzzle" className="w-full h-48 object-cover" />
@@ -41,7 +40,7 @@ export function PuzzlesPage() {
           <div className="p-4">
             <h2 className="text-xl font-bold text-foreground">Mate in 3</h2>
             <p className="text-muted-foreground">White to move • Rating: 1450</p>
-            <button className="w-full mt-4 chess-button-primary flex items-center justify-center gap-2">
+            <button className="w-full mt-4 py-3 rounded-full font-semibold text-primary-foreground bg-primary flex items-center justify-center gap-2">
               Solve Now
               <Play className="w-4 h-4 fill-current" />
             </button>
@@ -52,7 +51,7 @@ export function PuzzlesPage() {
         <section>
           <h2 className="text-lg font-bold text-foreground mb-3">Training Modes</h2>
           <div className="grid grid-cols-2 gap-3">
-            <div className="chess-card overflow-hidden">
+            <div className="bg-card rounded-2xl overflow-hidden border border-border/50">
               <div className="relative h-28">
                 <img src={chessHero} alt="Puzzle Rush" className="w-full h-full object-cover" />
                 <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-amber-500/80 flex items-center justify-center">
@@ -65,7 +64,7 @@ export function PuzzlesPage() {
                 <p className="text-sm text-primary font-semibold mt-1">Best: 24</p>
               </div>
             </div>
-            <div className="chess-card overflow-hidden">
+            <div className="bg-card rounded-2xl overflow-hidden border border-border/50">
               <div className="relative h-28">
                 <img src={chessEndgame} alt="Endgame" className="w-full h-full object-cover" />
                 <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-green-500/80 flex items-center justify-center">
@@ -82,7 +81,7 @@ export function PuzzlesPage() {
         </section>
 
         {/* Custom Puzzle Packs */}
-        <section className="chess-card p-4">
+        <section className="bg-card rounded-2xl p-4 border border-border/50">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-5 h-5 text-primary" />
           </div>
@@ -90,7 +89,7 @@ export function PuzzlesPage() {
           <p className="text-sm text-muted-foreground mt-1">
             Generate puzzles from your last 50 Rapid games to fix your mistakes.
           </p>
-          <button className="w-full mt-4 py-3 rounded-xl border border-border text-foreground font-medium">
+          <button className="w-full mt-4 py-3 rounded-xl border border-border text-primary font-medium">
             Create Pack
           </button>
         </section>
@@ -99,7 +98,7 @@ export function PuzzlesPage() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-foreground">Leaderboard</h2>
-            <button className="chess-link">View All</button>
+            <button className="text-primary font-medium text-sm">View All</button>
           </div>
           <div className="space-y-2">
             {leaderboardData.map((entry) => (
@@ -110,12 +109,10 @@ export function PuzzlesPage() {
                   entry.isUser ? 'bg-primary/10 border border-primary/30' : 'bg-card/50'
                 )}
               >
-                <span
-                  className={cn(
-                    'w-6 text-center font-bold',
-                    entry.rank === 1 ? 'text-amber-500' : 'text-muted-foreground'
-                  )}
-                >
+                <span className={cn(
+                  'w-6 text-center font-bold',
+                  entry.rank === 1 ? 'text-amber-500' : 'text-muted-foreground'
+                )}>
                   {entry.rank}
                 </span>
                 <ChessAvatar
@@ -125,9 +122,7 @@ export function PuzzlesPage() {
                 />
                 <div className="flex-1">
                   <p className="font-semibold text-foreground">{entry.username}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {entry.title} • {entry.rating}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{entry.title} • {entry.rating}</p>
                 </div>
                 <span className="font-bold text-primary">{entry.score}</span>
               </div>
@@ -136,7 +131,9 @@ export function PuzzlesPage() {
         </section>
       </div>
 
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} variant="puzzles" />
-    </PageContainer>
+      <BottomNav variant="puzzles" />
+    </div>
   );
 }
+
+export default PuzzlesPage;

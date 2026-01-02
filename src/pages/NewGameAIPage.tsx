@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Bot, Zap, ChevronRight, Play } from 'lucide-react';
-import { PageContainer, PageHeader } from '@/components/layout/PageContainer';
-import { BackButton } from '@/components/ui/IconButton';
+import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '@/stores/gameStore';
 import { AIDifficulty, PieceColor } from '@/types/chess';
 import { cn } from '@/lib/utils';
@@ -15,35 +14,35 @@ const difficulties: { id: AIDifficulty; label: string }[] = [
   { id: 'legend', label: 'Legend' },
 ];
 
-interface NewGameAIPageProps {
-  onBack?: () => void;
-  onStart?: () => void;
-}
-
-export function NewGameAIPage({ onBack, onStart }: NewGameAIPageProps) {
-  const { aiDifficulty, setAIDifficulty, playerColor, setPlayerColor, startGame } = useGameStore();
-  const [selectedDifficulty, setSelectedDifficulty] = useState(aiDifficulty);
-  const [selectedColor, setSelectedColor] = useState<PieceColor | 'random'>(playerColor);
+export function NewGameAIPage() {
+  const navigate = useNavigate();
+  const { setAIDifficulty, setPlayerColor, startGame } = useGameStore();
+  const [selectedDifficulty, setSelectedDifficulty] = useState<AIDifficulty>('professional');
+  const [selectedColor, setSelectedColor] = useState<PieceColor | 'random'>('random');
 
   const handleStart = () => {
     setAIDifficulty(selectedDifficulty);
     setPlayerColor(selectedColor);
     startGame();
-    onStart?.();
+    navigate('/game');
   };
 
   const getDifficultyIndex = () => difficulties.findIndex((d) => d.id === selectedDifficulty);
 
   return (
-    <PageContainer className="pb-8">
-      <PageHeader
-        title="New Game vs AI"
-        leftAction={<BackButton onClick={onBack} />}
-      />
+    <div className="min-h-screen bg-background pb-8">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 py-3">
+        <button onClick={() => navigate('/')} className="w-10 h-10 flex items-center justify-center rounded-full bg-secondary/50">
+          <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+        </button>
+        <h1 className="text-lg font-semibold text-foreground">New Game vs AI</h1>
+        <div className="w-10" />
+      </header>
 
       <div className="px-4 space-y-6">
         {/* AI Card */}
-        <div className="chess-card p-6 text-center">
+        <div className="bg-card rounded-2xl p-6 text-center border border-border/50">
           <div className="w-20 h-20 rounded-2xl bg-primary mx-auto flex items-center justify-center relative">
             <Bot className="w-10 h-10 text-primary-foreground" />
             <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center">
@@ -70,7 +69,7 @@ export function NewGameAIPage({ onBack, onStart }: NewGameAIPageProps) {
             <h3 className="font-bold text-foreground">Difficulty</h3>
             <span className="text-primary font-medium capitalize">{selectedDifficulty}</span>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+          <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
             {difficulties.map((diff) => (
               <button
                 key={diff.id}
@@ -104,7 +103,7 @@ export function NewGameAIPage({ onBack, onStart }: NewGameAIPageProps) {
         <section>
           <h3 className="font-bold text-foreground mb-3">Board & Pieces</h3>
           <div className="space-y-2">
-            <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-card">
+            <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50">
               <div className="w-12 h-12 rounded-lg overflow-hidden">
                 <img src={chessHero} alt="" className="w-full h-full object-cover" />
               </div>
@@ -114,7 +113,7 @@ export function NewGameAIPage({ onBack, onStart }: NewGameAIPageProps) {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
-            <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-card">
+            <button className="w-full flex items-center gap-3 p-3 rounded-xl bg-card border border-border/50">
               <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center">
                 <Bot className="w-6 h-6 text-muted-foreground" />
               </div>
@@ -169,12 +168,15 @@ export function NewGameAIPage({ onBack, onStart }: NewGameAIPageProps) {
         {/* Start Button */}
         <button
           onClick={handleStart}
-          className="w-full chess-button-primary flex items-center justify-center gap-2 py-4 text-lg"
+          className="w-full py-4 rounded-full font-semibold text-lg text-primary-foreground bg-primary flex items-center justify-center gap-2"
+          style={{ boxShadow: '0 0 20px rgba(232, 90, 0, 0.4)' }}
         >
           Start Game
           <Play className="w-5 h-5 fill-current" />
         </button>
       </div>
-    </PageContainer>
+    </div>
   );
 }
+
+export default NewGameAIPage;

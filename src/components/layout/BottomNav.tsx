@@ -1,71 +1,112 @@
-import { Home, Gamepad2, BookOpen, Users, User, Plus, Play, GraduationCap, BarChart3 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Home, Gamepad2, BookOpen, Users, User, Plus, Play, GraduationCap, BarChart3, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type TabId = 'home' | 'games' | 'learn' | 'social' | 'profile' | 'play' | 'puzzles' | 'stats' | 'clubs';
+export type NavVariant = 'home' | 'learn' | 'community' | 'profile' | 'puzzles';
 
 interface BottomNavProps {
-  activeTab: TabId;
-  onTabChange: (tab: TabId) => void;
-  variant?: 'home' | 'learn' | 'community' | 'profile' | 'puzzles';
+  variant?: NavVariant;
 }
 
-const homeNavItems: { id: TabId; icon: typeof Home; label: string }[] = [
-  { id: 'home', icon: Home, label: 'Home' },
-  { id: 'games', icon: Gamepad2, label: 'Games' },
-  { id: 'social', icon: Users, label: 'Social' },
-  { id: 'profile', icon: User, label: 'Profile' },
-];
+export function BottomNav({ variant = 'home' }: BottomNavProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
 
-const learnNavItems: { id: TabId; icon: typeof Home; label: string }[] = [
-  { id: 'play', icon: Gamepad2, label: 'Play' },
-  { id: 'learn', icon: GraduationCap, label: 'Learn' },
-  { id: 'stats', icon: BarChart3, label: 'Stats' },
-  { id: 'profile', icon: User, label: 'Profile' },
-];
+  const getNavConfig = () => {
+    switch (variant) {
+      case 'home':
+        return {
+          items: [
+            { path: '/', icon: Home, label: 'Home' },
+            { path: '/play-online', icon: Gamepad2, label: 'Games' },
+            { path: '/community', icon: Users, label: 'Social' },
+            { path: '/profile', icon: User, label: 'Profile' },
+          ],
+          centerAction: () => navigate('/new-game-ai'),
+          centerIcon: Plus,
+        };
+      case 'learn':
+        return {
+          items: [
+            { path: '/new-game-ai', icon: Gamepad2, label: 'Play' },
+            { path: '/learn', icon: GraduationCap, label: 'Learn' },
+            { path: '/profile', icon: BarChart3, label: 'Stats' },
+            { path: '/profile', icon: User, label: 'Profile' },
+          ],
+          centerAction: null,
+          centerIcon: null,
+        };
+      case 'community':
+        return {
+          items: [
+            { path: '/', icon: Home, label: 'Home' },
+            { path: '/learn', icon: GraduationCap, label: 'Learn' },
+            { path: '/community', icon: Users, label: 'Clubs' },
+            { path: '/profile', icon: User, label: 'Profile' },
+          ],
+          centerAction: () => navigate('/play-online'),
+          centerIcon: Play,
+        };
+      case 'puzzles':
+        return {
+          items: [
+            { path: '/new-game-ai', icon: Gamepad2, label: 'Play' },
+            { path: '/puzzles', icon: Puzzle, label: 'Puzzles' },
+            { path: '/community', icon: Users, label: 'Social' },
+            { path: '/profile', icon: User, label: 'Profile' },
+          ],
+          centerAction: null,
+          centerIcon: null,
+        };
+      case 'profile':
+        return {
+          items: [
+            { path: '/new-game-ai', icon: Gamepad2, label: 'Play' },
+            { path: '/learn', icon: GraduationCap, label: 'Learn' },
+            { path: '/profile', icon: User, label: 'Profile' },
+            { path: '/community', icon: Users, label: 'Social' },
+          ],
+          centerAction: null,
+          centerIcon: null,
+        };
+      default:
+        return {
+          items: [],
+          centerAction: null,
+          centerIcon: null,
+        };
+    }
+  };
 
-const communityNavItems: { id: TabId; icon: typeof Home; label: string }[] = [
-  { id: 'home', icon: Home, label: 'Home' },
-  { id: 'learn', icon: GraduationCap, label: 'Learn' },
-  { id: 'clubs', icon: Users, label: 'Clubs' },
-  { id: 'profile', icon: User, label: 'Profile' },
-];
-
-const puzzlesNavItems: { id: TabId; icon: typeof Home; label: string }[] = [
-  { id: 'play', icon: Gamepad2, label: 'Play' },
-  { id: 'puzzles', icon: GraduationCap, label: 'Puzzles' },
-  { id: 'social', icon: Users, label: 'Social' },
-  { id: 'profile', icon: User, label: 'Profile' },
-];
-
-export function BottomNav({ activeTab, onTabChange, variant = 'home' }: BottomNavProps) {
-  const navItems = variant === 'learn' 
-    ? learnNavItems 
-    : variant === 'community' 
-    ? communityNavItems 
-    : variant === 'puzzles'
-    ? puzzlesNavItems
-    : homeNavItems;
-
-  const hasCenterButton = variant === 'home' || variant === 'community';
-  const centerIcon = variant === 'community' ? Play : Plus;
+  const config = getNavConfig();
+  const hasCenterButton = config.centerAction !== null;
+  const firstTwo = config.items.slice(0, 2);
+  const lastTwo = config.items.slice(2);
 
   return (
-    <nav className="bottom-nav">
-      <div className="flex items-center justify-around max-w-md mx-auto">
-        {navItems.slice(0, 2).map((item) => (
+    <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border/50 z-50 max-w-md mx-auto" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
+      <div className="flex items-center justify-around">
+        {firstTwo.map((item) => (
           <button
-            key={item.id}
-            onClick={() => onTabChange(item.id)}
-            className={cn('bottom-nav-item', activeTab === item.id && 'active')}
+            key={item.path + item.label}
+            onClick={() => navigate(item.path)}
+            className={cn(
+              'flex flex-col items-center justify-center gap-1 py-3 px-4 transition-colors flex-1',
+              location.pathname === item.path ? 'text-primary' : 'text-muted-foreground'
+            )}
           >
             <item.icon className="w-6 h-6" />
             <span className="text-xs font-medium">{item.label}</span>
           </button>
         ))}
 
-        {hasCenterButton && (
-          <div className="flex flex-col items-center">
-            <button className="bottom-nav-center">
+        {hasCenterButton && config.centerIcon && (
+          <div className="flex flex-col items-center -mt-6">
+            <button
+              onClick={config.centerAction!}
+              className="w-14 h-14 rounded-full flex items-center justify-center bg-primary shadow-lg"
+              style={{ boxShadow: '0 0 20px rgba(232, 90, 0, 0.4)' }}
+            >
               {variant === 'community' ? (
                 <Play className="w-6 h-6 text-primary-foreground fill-current" />
               ) : (
@@ -75,11 +116,14 @@ export function BottomNav({ activeTab, onTabChange, variant = 'home' }: BottomNa
           </div>
         )}
 
-        {navItems.slice(2).map((item) => (
+        {lastTwo.map((item) => (
           <button
-            key={item.id}
-            onClick={() => onTabChange(item.id)}
-            className={cn('bottom-nav-item', activeTab === item.id && 'active')}
+            key={item.path + item.label}
+            onClick={() => navigate(item.path)}
+            className={cn(
+              'flex flex-col items-center justify-center gap-1 py-3 px-4 transition-colors flex-1',
+              location.pathname === item.path ? 'text-primary' : 'text-muted-foreground'
+            )}
           >
             <item.icon className="w-6 h-6" />
             <span className="text-xs font-medium">{item.label}</span>
@@ -89,3 +133,5 @@ export function BottomNav({ activeTab, onTabChange, variant = 'home' }: BottomNa
     </nav>
   );
 }
+
+export default BottomNav;
