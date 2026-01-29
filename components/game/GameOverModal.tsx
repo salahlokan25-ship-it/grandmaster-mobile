@@ -3,38 +3,46 @@ import { View, Text, Modal, TouchableOpacity, Image } from 'react-native';
 import { Share2, Clock, Trophy, X, ChevronRight, History, Play, Share } from 'lucide-react-native';
 import { cn } from '../../lib/utils';
 import { PieceColor } from '../../types/chess';
-import { useSocialStore } from '../../stores/socialStore';
 import { useGameStore } from '../../stores/gameStore';
+import { useAuthStore } from '../../stores/authStore';
 
 interface GameOverModalProps {
     visible: boolean;
     onClose: () => void;
     winner: PieceColor | 'draw' | null;
     onRematch: () => void;
+    opponent?: {
+        id: string;
+        username: string;
+        fixed_id: string;
+    } | null;
 }
 
-export function GameOverModal({ visible, onClose, winner, onRematch }: GameOverModalProps) {
-    const { addStory, addPost } = useSocialStore();
+export function GameOverModal({ visible, onClose, winner, onRematch, opponent }: GameOverModalProps) {
     const { gameState, gameMode, aiDifficulty } = useGameStore();
+    const { profile } = useAuthStore();
+    const [requestSent, setRequestSent] = React.useState(false);
+
+    const handleCopyOpponentId = async () => {
+        if (opponent?.fixed_id) {
+            const Clipboard = (await import('expo-clipboard')).default;
+            await Clipboard.setStringAsync(opponent.fixed_id);
+            // In a real app, show a toast here
+        }
+    };
+
+    const handleAddFriend = async () => {
+        // Friend functionality would be implemented with Supabase
+        setRequestSent(true);
+    };
 
     const handleShareStory = () => {
-        addStory({
-            type: 'game_result',
-            content: 'FEN_PLACEHOLDER', // In a real app, capture current FEN
-            result: {
-                winner: winner || 'draw',
-                opponent: gameMode === 'ai' ? `AI (${aiDifficulty})` : 'Opponent',
-                gameType: 'Blitz 5+0',
-            },
-        });
+        // Share functionality would be implemented with Supabase
         onClose();
     };
 
     const handleSharePost = () => {
-        addPost({
-            content: `Just finished a great game of Strategos! ${winner === 'white' ? 'Victory is mine! 🎉' : winner === 'draw' ? "It's a draw! 🤝" : 'Tough loss, but I learned a lot. ♟️'}`,
-            gameFen: 'FEN_PLACEHOLDER',
-        });
+        // Share functionality would be implemented with Supabase
         onClose();
     };
 
@@ -68,6 +76,35 @@ export function GameOverModal({ visible, onClose, winner, onRematch }: GameOverM
                             {isVictory ? 'Splendid performance, grandmaster.' : isDraw ? 'A hard-fought battle.' : 'Every loss is a lesson.'}
                         </Text>
                     </View>
+
+                    {/* Opponent Social Section (Online Only) */}
+                    {gameMode === 'online' && opponent && (
+                        <View className="bg-amber-500/5 rounded-3xl p-6 mb-6 border border-amber-500/10">
+                            <View className="flex-row items-center justify-between mb-4">
+                                <View>
+                                    <Text className="text-white/40 text-[10px] uppercase font-bold tracking-widest mb-1">Opponent UID</Text>
+                                    <View className="flex-row items-center gap-2">
+                                        <Text className="text-amber-500 font-mono text-xl font-bold tracking-widest leading-none">
+                                            {opponent.fixed_id}
+                                        </Text>
+                                        <TouchableOpacity onPress={handleCopyOpponentId} className="bg-amber-500/10 p-2 rounded-lg">
+                                            <Share2 size={14} color="#f59e0b" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={handleAddFriend}
+                                    disabled={requestSent}
+                                    className={`px-5 py-3 rounded-xl border ${requestSent ? 'bg-green-500/10 border-green-500/20' : 'bg-amber-500 border-amber-600 shadow-lg shadow-amber-500/30'}`}
+                                >
+                                    <Text className={`font-bold text-xs uppercase tracking-widest ${requestSent ? 'text-green-500' : 'text-black'}`}>
+                                        {requestSent ? 'Sent ✓' : 'Add Friend'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            <Text className="text-white/30 text-[10px] italic">Enjoyed the match? Connect with {opponent.username} for a rematch later!</Text>
+                        </View>
+                    )}
 
                     {/* Sharing Section */}
                     <View className="bg-secondary/30 rounded-3xl p-6 mb-8 border border-border/30">

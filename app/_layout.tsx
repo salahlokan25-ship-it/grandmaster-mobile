@@ -1,21 +1,19 @@
+import 'react-native-url-polyfill/auto';
+import 'expo-standard-web-crypto';
 import "../global.css";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { View, Image, Text } from "react-native";
+import { View, Image, Text, Platform } from "react-native";
 import { useEffect, useState } from 'react';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withDelay, runOnJS } from 'react-native-reanimated';
-import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { useUserStore } from '../stores/userStore';
-import { ChallengeListener } from '../components/ChallengeListener';
+import { useAuthStore } from '../stores/authStore';
 
 export default function RootLayout() {
     const [isSplashVisible, setSplashVisible] = useState(true);
     const [isTransitioning, setIsTransitioning] = useState(false);
-    const [user, setUser] = useState<any>(null);
     const segments = useSegments();
     const router = useRouter();
+    const { user, isAuthenticated, checkAuth } = useAuthStore();
 
     // Splash Animation Values
     const scale = useSharedValue(0.3);
@@ -57,119 +55,23 @@ export default function RootLayout() {
     };
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, u => {
-            if (u) {
-                // Fetch profile in background to avoid blocking transition
-                getDoc(doc(db, 'users', u.uid)).then(async (userDoc) => {
-                    let strategoId = '';
-                    let userData: any = {};
-
-                    if (userDoc.exists()) {
-                        userData = userDoc.data();
-                        strategoId = userData.strategoId;
-
-                        // Auto-recovery for missing IDs or old 8-digit IDs
-                        if (!strategoId || strategoId.length < 10) {
-                            const { generateStrategoId } = await import('../lib/utils');
-                            strategoId = generateStrategoId();
-                            updateDoc(doc(db, 'users', u.uid), { strategoId })
-                                .catch(e => console.error('Failed to auto-repair UID:', e));
-                        }
-                    } else {
-                        // Document doesn't exist yet (race condition during signup)
-                        const { generateStrategoId } = await import('../lib/utils');
-                        strategoId = generateStrategoId();
-                        userData = {
-                            id: u.uid,
-                            username: u.email?.split('@')[0] || 'Player',
-                            strategoId,
-                            avatar: `https://i.pravatar.cc/150?u=${u.uid}`,
-                            elo: 1200,
-                            createdAt: Date.now(),
-                        };
-                        setDoc(doc(db, 'users', u.uid), userData)
-                            .catch(e => console.error('Failed to initialize missing user doc:', e));
-                    }
-
-                    useUserStore.getState().setUser({
-                        id: u.uid,
-                        username: userData.username || u.email?.split('@')[0] || 'Player',
-                        avatar: userData.avatar || '',
-                        rating: userData.elo || 1200,
-                        strategoId: strategoId,
-                    });
-
-                    if (userData.hasCompletedOnboarding) {
-                        useUserStore.getState().completeOnboarding();
-                    }
-
-                    useUserStore.getState().setProfileLoaded(true);
-                })
-                    .catch(error => {
-                        console.warn('Failed to fetch user profile from Firestore:', error);
-                        // Minimal fallback - preserved existing strategoId if possible
-                        const currentStoreUser = useUserStore.getState().currentUser;
-                        useUserStore.getState().setUser({
-                            id: u.uid,
-                            username: u.email?.split('@')[0] || 'Player',
-                            avatar: currentStoreUser.avatar || '',
-                            rating: currentStoreUser.rating || 1200,
-                            strategoId: currentStoreUser.strategoId || '',
-                        });
-                        useUserStore.getState().setProfileLoaded(true);
-                    });
-
-                // Set basic user data immediately so transition can start
-                // ONLY update if store is empty or for a different user
-                const currentStoreUser = useUserStore.getState().currentUser;
-                if (currentStoreUser.id !== u.uid) {
-                    useUserStore.getState().setUser({
-                        id: u.uid,
-                        username: u.email?.split('@')[0] || 'Player',
-                        avatar: currentStoreUser.avatar || '',
-                        rating: 1200,
-                        strategoId: currentStoreUser.strategoId || '', // Persist existing if available
-                    });
-                }
-            }
-            // If user just logged in (from null to u) and we are not in the initial splash
-            if (!user && u && !isSplashVisible) {
-                // Super-fast transition for login, the 'hold' logic handle the rest
-                triggerSplash(() => setIsTransitioning(false), 100);
-            }
-            setUser(u);
-        });
-
-        // Initial boot splash can be slightly longer for brand but still faster than before
-        triggerSplash(undefined, 1200);
-
-        return unsubscribe;
+        // Auth check is now handled via onRehydrateStorage in authStore
+        // which triggers as soon as the store is ready.
+        triggerSplash(undefined, 1500);
     }, []);
 
-    const hasCompletedOnboarding = useUserStore(state => state.hasCompletedOnboarding);
-    const isProfileLoaded = useUserStore(state => state.isProfileLoaded);
-
-    const inAuthGroup = segments[0] === 'auth';
+    const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[0] === 'onboarding';
 
     useEffect(() => {
         if (isSplashVisible || isTransitioning) return;
 
-        if (!user && !inAuthGroup) {
-            router.replace('/auth');
-        } else if (user && inAuthGroup) {
-            // Instant transition: if we don't know yet, login assumes true anyway
-            if (!hasCompletedOnboarding) {
-                router.replace('/onboarding');
-            } else {
-                router.replace('/(tabs)');
-            }
-        } else if (user && !hasCompletedOnboarding && !inOnboarding) {
-            // Only redirect to onboarding if we are CERTAIN it's needed
-            // This avoids flickering for existing users while profile is loading
-            router.replace('/onboarding');
+        if (!isAuthenticated && !inAuthGroup) {
+            router.replace('/(auth)/sign-in');
+        } else if (isAuthenticated && inAuthGroup && !segments.includes('welcome')) {
+            router.replace('/(tabs)/');
         }
-    }, [user, segments, isSplashVisible, hasCompletedOnboarding, isProfileLoaded]);
+    }, [isAuthenticated, segments, isSplashVisible]);
 
     const splashIconStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }],
@@ -190,33 +92,23 @@ export default function RootLayout() {
         flex: 1,
     }));
 
-    // Critical: Keep splash visible until profile is ready to avoid seeing the login screen hang
-    const showSplashOverlay = isSplashVisible || (user && !isProfileLoaded && inAuthGroup);
-
     return (
         <View style={{ flex: 1, backgroundColor: "#000" }}>
             <StatusBar style="light" />
 
-            {/* Main App Content - Mounts in background, visibility controlled by showSplashOverlay */}
-            <Animated.View style={[appAnimatedStyle, { opacity: (user && !isProfileLoaded && inAuthGroup) ? 0 : appOpacity.value }]}>
-                <ChallengeListener />
+            <Animated.View style={appAnimatedStyle}>
                 <Stack screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="auth" options={{ headerShown: false }} />
+                    <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                     <Stack.Screen name="onboarding" options={{ headerShown: false }} />
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                     <Stack.Screen name="quiz" options={{ presentation: 'modal' }} />
                 </Stack>
             </Animated.View>
 
-            {/* Splash Overlay */}
-            {showSplashOverlay && (
+            {isSplashVisible && (
                 <Animated.View
                     className="absolute inset-0 bg-black items-center justify-center z-50"
-                    style={[
-                        splashContainerStyle,
-                        // Force opacity 1 if we are explicitly holding for profile
-                        (user && !isProfileLoaded && inAuthGroup) ? { opacity: 1 } : {}
-                    ]}
+                    style={splashContainerStyle}
                 >
                     <View className="items-center gap-6">
                         <Animated.View style={splashIconStyle}>

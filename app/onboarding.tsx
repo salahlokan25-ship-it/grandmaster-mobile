@@ -4,13 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronRight, User, Calendar, Target, Clock } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { useUserStore } from '../stores/userStore';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { useAuthStore } from '../stores/authStore';
 
 export default function OnboardingScreen() {
     const router = useRouter();
-    const { updateProfile, completeOnboarding } = useUserStore();
+    const { updateProfile, profile } = useAuthStore();
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({
         displayName: '',
@@ -38,31 +36,15 @@ export default function OnboardingScreen() {
         setLoading(true);
 
         try {
-            const user = auth.currentUser;
-            const profileUpdate = {
-                displayName: formData.displayName,
-                ageRange: formData.ageRange,
-                experienceLevel: formData.experienceLevel,
-                playFrequency: formData.playFrequency,
-                hasCompletedOnboarding: true,
-                onboardingCompletedAt: Date.now(),
-            };
+            // Update profile with Supabase
+            await updateProfile({
+                display_name: formData.displayName,
+            });
 
-            // 1. Update local store immediately
-            updateProfile(formData);
-            completeOnboarding();
-
-            // 2. Perform background Firestore update
-            if (user) {
-                updateDoc(doc(db, 'users', user.uid), profileUpdate)
-                    .catch(e => console.error('Background update failed:', e));
-            }
-
-            // 3. Navigate immediately to home screen
-            router.replace('/(tabs)');
+            // Navigate to home screen
+            router.replace('/(tabs)/home');
         } catch (error) {
             console.error('Error in onboarding submission:', error);
-            // Even if local state fails, try to move them forward or reset loading
             setLoading(false);
             alert('Something went wrong. Please try again.');
         }

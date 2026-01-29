@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { GameState, Piece, PieceColor, Square, Move, AIDifficulty, TimeControl } from '@/types/chess';
 import { getValidMoves, isValidMove, isCheck, isCheckmate, isStalemate } from '@/lib/chessRules';
+import { speakMove, speakMessage } from '@/lib/speech';
 
 const initialBoard: (Piece | null)[][] = [
   [
@@ -45,6 +46,9 @@ interface GameStore {
   blackTimeRemaining: number;
   timerActive: boolean;
   lastMoveTimestamp: number;
+  isSpeechEnabled: boolean;
+  onlineGameId: string | null;
+  userColor: PieceColor | null;
 
   selectSquare: (square: Square | null) => void;
   makeMove: (from: Square, to: Square) => void;
@@ -52,6 +56,7 @@ interface GameStore {
   setTimeControl: (control: TimeControl) => void;
   setPlayerColor: (color: PieceColor | 'random') => void;
   startNewGame: (mode?: 'local' | 'ai' | 'online') => void;
+  initOnlineGame: (gameId: string, userColor: PieceColor) => void;
   startTimer: () => void;
   pauseTimer: () => void;
   updateTimer: (color: PieceColor) => void;
@@ -60,6 +65,8 @@ interface GameStore {
   undoMove: () => void;
   getHint: () => void;
   makeAIMove: () => void;
+  toggleSpeech: () => void;
+  syncOnlineMove: (move: { from: Square; to: Square }) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -85,6 +92,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   blackTimeRemaining: 10 * 60 * 1000, // 10 minutes in milliseconds
   timerActive: false,
   lastMoveTimestamp: Date.now(),
+  isSpeechEnabled: true,
+  onlineGameId: null,
+  userColor: null,
 
   selectSquare: (square: Square | null) => {
     const { gameState, selectedSquare, validMoves } = get();
@@ -218,11 +228,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : 'Good development. Control the center.',
     });
 
+    // Speak the move
+    const { isSpeechEnabled } = get();
+    speakMove(notation, isSpeechEnabled);
+    if (checkmate || stalemate) {
+      setTimeout(() => speakMessage(checkmate ? 'Checkmate' : 'Stalemate', isSpeechEnabled), 1000);
+    }
+
     // Trigger AI move if in AI mode and it's now AI's turn (and game is not over)
     if (gameMode === 'ai' && nextTurn === 'black' && !checkmate && !stalemate) {
       setTimeout(() => {
         get().makeAIMove();
       }, 500);
+    }
+
+    // Push move to Supabase if in online mode
+    const { onlineGameId, userColor } = get();
+    if (gameMode === 'online' && onlineGameId && userColor === piece.color) {
+      import('@/lib/games').then(({ GameService }) => {
+        GameService.submitOnlineMove(onlineGameId, { from, to }, ''); // FEN intentionally empty for now as we sync via moves
+      });
     }
   },
 
@@ -250,7 +275,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     blackTimeRemaining: 10 * 60 * 1000,
     timerActive: false,
     lastMoveTimestamp: Date.now(),
+    onlineGameId: null,
+    userColor: mode === 'online' ? get().userColor : null,
   }),
+
+  initOnlineGame: (gameId: string, color: PieceColor) => {
+    get().startNewGame('online');
+    set({
+      onlineGameId: gameId,
+      userColor: color,
+      aiCoachMessage: `Online match started! You are playing as ${color.charAt(0).toUpperCase() + color.slice(1)}.`
+    });
+  },
 
   resetGame: () => get().startNewGame(get().gameMode),
 
@@ -318,5 +354,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       timerActive: false,
       aiCoachMessage: `Time's up! ${winner.charAt(0).toUpperCase() + winner.slice(1)} wins by timeout!`,
     }));
+  },
+  toggleSpeech: () => set((state) => ({ isSpeechEnabled: !state.isSpeechEnabled })),
+
+  syncOnlineMove: (move: { from: Square; to: Square }) => {
+    const { from, to } = move;
+    get().makeMove(from, to);
   },
 }));

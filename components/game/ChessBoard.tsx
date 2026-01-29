@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useGameStore } from '../../stores/gameStore';
 import { cn } from '../../lib/utils';
@@ -7,6 +8,7 @@ interface ChessBoardProps {
   size?: 'sm' | 'md' | 'lg';
   interactive?: boolean;
   showCoordinates?: boolean;
+  flipped?: boolean;
   className?: string;
 }
 
@@ -14,27 +16,45 @@ export function ChessBoard({
   size = 'md',
   interactive = true,
   showCoordinates = true,
+  flipped = false,
   className,
 }: ChessBoardProps) {
   const { gameState, selectedSquare, validMoves, selectSquare } = useGameStore();
-  const { board } = gameState;
+
+  // Create a transformed board for rendering if flipped
+  const displayBoard = useMemo(() => {
+    if (!flipped) return gameState.board;
+    // Reverse rows and then reverse columns in each row
+    return [...gameState.board].reverse().map(row => [...row].reverse());
+  }, [gameState.board, flipped]);
 
   const handleSquarePress = (row: number, col: number) => {
     if (!interactive) return;
-    selectSquare({ row, col });
+    // Convert back to original coordinates if flipped
+    const actualRow = flipped ? 7 - row : row;
+    const actualCol = flipped ? 7 - col : col;
+    selectSquare({ row: actualRow, col: actualCol });
   };
 
-  const isSelected = (row: number, col: number) =>
-    selectedSquare?.row === row && selectedSquare?.col === col;
+  const isSelected = (row: number, col: number) => {
+    const actualRow = flipped ? 7 - row : row;
+    const actualCol = flipped ? 7 - col : col;
+    return selectedSquare?.row === actualRow && selectedSquare?.col === actualCol;
+  };
 
-  const isValidMove = (row: number, col: number) =>
-    validMoves.some((m) => m.row === row && m.col === col);
+  const isValidMove = (row: number, col: number) => {
+    const actualRow = flipped ? 7 - row : row;
+    const actualCol = flipped ? 7 - col : col;
+    return validMoves.some((m) => m.row === actualRow && m.col === actualCol);
+  };
 
   const getMoveHighlight = (row: number, col: number) => {
+    const actualRow = flipped ? 7 - row : row;
+    const actualCol = flipped ? 7 - col : col;
     const lastMove = gameState.moves[gameState.moves.length - 1];
     if (!lastMove) return null;
-    if (lastMove.from.row === row && lastMove.from.col === col) return 'from';
-    if (lastMove.to.row === row && lastMove.to.col === col) return 'to';
+    if (lastMove.from.row === actualRow && lastMove.from.col === actualCol) return 'from';
+    if (lastMove.to.row === actualRow && lastMove.to.col === actualCol) return 'to';
     return null;
   };
 
@@ -63,9 +83,9 @@ export function ChessBoard({
         }}
       >
         <View className="flex-1 rounded-[4px] overflow-hidden shadow-inner">
-          {board.map((rowPieces, row) => (
+          {displayBoard.map((rowPieces: (any | null)[], row: number) => (
             <View key={row} className="flex-1 flex-row">
-              {rowPieces.map((piece, col) => {
+              {rowPieces.map((piece: any | null, col: number) => {
                 const isLight = (row + col) % 2 === 0;
                 const selected = isSelected(row, col);
                 const validMove = isValidMove(row, col);
@@ -73,6 +93,10 @@ export function ChessBoard({
 
                 const squareColor = isLight ? LIGHT_SQUARE : DARK_SQUARE;
                 const coordColor = isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
+
+                // Calculate display coordinates
+                const displayRank = flipped ? row + 1 : 8 - row;
+                const displayFile = flipped ? cols[7 - col] : cols[col];
 
                 return (
                   <TouchableOpacity
@@ -102,7 +126,7 @@ export function ChessBoard({
                         className="absolute top-0.5 left-1 text-[9px] font-bold"
                         style={{ color: coordColor }}
                       >
-                        {8 - row}
+                        {displayRank}
                       </Text>
                     )}
                     {showCoordinates && row === 7 && (
@@ -110,7 +134,7 @@ export function ChessBoard({
                         className="absolute bottom-0.5 right-1 text-[9px] font-bold"
                         style={{ color: coordColor }}
                       >
-                        {cols[col]}
+                        {displayFile}
                       </Text>
                     )}
 

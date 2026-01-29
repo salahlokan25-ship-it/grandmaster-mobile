@@ -22,7 +22,7 @@ export interface Move {
 
 export interface Player {
   id: string;
-  strategoId?: string;
+  fixed_id?: string;
   username: string;
   avatar?: string;
   rating: number;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -8,23 +8,27 @@ import {
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { useUserStore } from '../../stores/userStore';
+import { useAuthStore } from '../../stores/authStore';
+import { ProfileCard } from '../../components/ProfileCard';
 import { PerformanceChart } from '../../components/profile/PerformanceChart';
 import { cn } from '../../lib/utils';
 import * as Clipboard from 'expo-clipboard';
 
 export default function ProfilePage() {
     const router = useRouter();
-    const {
-        currentUser, stats, achievements, matchHistory, performanceHistory,
-        updateProfile, logout, deleteAccount
-    } = useUserStore();
+    const { user, profile, signOut, isAuthenticated, isLoading, checkAuth } = useAuthStore();
     const [uploading, setUploading] = useState(false);
 
+    useEffect(() => {
+        if (!isAuthenticated && !isLoading) {
+            router.replace('/(auth)/sign-in');
+        }
+    }, [isAuthenticated, isLoading, router]);
+
     const copyId = async () => {
-        if (currentUser.strategoId) {
-            await Clipboard.setStringAsync(currentUser.strategoId);
-            Alert.alert('Copied', 'Your Strategos ID has been copied to clipboard!');
+        if (profile?.fixed_id) {
+            await Clipboard.setStringAsync(profile.fixed_id);
+            Alert.alert('Copied', 'Your User ID has been copied to clipboard!');
         }
     };
 
@@ -42,12 +46,13 @@ export default function ProfilePage() {
             quality: 0.5,
         });
 
-        if (!result.canceled) {
+        if (!result.canceled && profile) {
             setUploading(true);
             try {
-                // In a real app, we would upload to Firebase Storage here
-                // For now, we'll update the local state with the URI
-                updateProfile({ avatar: result.assets[0].uri });
+                // Update profile with new avatar URL
+                await useAuthStore.getState().updateProfile({
+                    avatar_url: result.assets[0].uri
+                });
                 Alert.alert('Success', 'Profile picture updated!');
             } catch (error) {
                 Alert.alert('Error', 'Failed to update profile picture.');
@@ -64,177 +69,134 @@ export default function ProfilePage() {
                 text: 'Logout',
                 style: 'destructive',
                 onPress: async () => {
-                    await logout();
-                    router.replace('/auth');
+                    await signOut();
+                    router.replace('/(auth)/sign-in');
                 }
             }
         ]);
     };
 
-    const handleDeleteAccount = () => {
-        Alert.alert(
-            'Delete Account',
-            'This action is permanent and cannot be undone. All your progress will be lost.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete Everything',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await deleteAccount();
-                        router.replace('/auth');
-                    }
-                }
-            ]
+    if (isLoading) {
+        return (
+            <View className="flex-1 bg-[#0c0a09] items-center justify-center">
+                <ActivityIndicator size="large" color="#f59e0b" />
+            </View>
         );
-    };
+    }
+
+    if (!profile) {
+        return (
+            <SafeAreaView className="flex-1 bg-[#0c0a09] items-center justify-center p-6">
+                <Text className="text-white/60 text-center mb-6">Failed to load profile data.</Text>
+                <TouchableOpacity
+                    onPress={() => checkAuth()}
+                    className="bg-amber-500 px-8 py-4 rounded-2xl"
+                >
+                    <Text className="text-black font-black uppercase">Retry Connection</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView className="flex-1 bg-[#0c0a09]" edges={['top']}>
             <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-                {/* Header Backdrop & Info */}
-                <View className="relative">
-                    <View className="h-48 bg-stone-900 border-b border-white/5" />
+                {/* Profile Card with Fixed ID */}
+                <View className="px-6 pt-6">
+                    <ProfileCard profile={profile} showCopyId={true} />
+                </View>
 
-                    <View className="px-6 -mt-20">
-                        <View className="relative self-start">
-                            <View className="w-32 h-32 rounded-[40px] bg-stone-800 overflow-hidden border-4 border-[#0c0a09] shadow-2xl items-center justify-center">
-                                {currentUser.avatar ? (
-                                    <Image source={{ uri: currentUser.avatar }} className="w-full h-full" />
-                                ) : (
-                                    <View className="w-full h-full bg-amber-500/10 items-center justify-center">
-                                        <Text className="text-5xl">♟️</Text>
-                                    </View>
-                                )}
-                                {uploading && (
-                                    <View className="absolute inset-0 bg-black/50 items-center justify-center">
-                                        <ActivityIndicator color="#f59e0b" />
-                                    </View>
-                                )}
-                            </View>
-                            <TouchableOpacity
-                                onPress={handlePickImage}
-                                className="absolute bottom-0 right-0 w-10 h-10 bg-amber-500 rounded-2xl items-center justify-center border-4 border-[#0c0a09]"
-                            >
-                                <Camera size={18} color="#0c0a09" strokeWidth={2.5} />
-                            </TouchableOpacity>
+                {/* Quick Stats */}
+                <View className="px-6 mt-6">
+                    <Text className="text-white/40 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Chess Stats</Text>
+                    <View className="flex-row gap-3">
+                        <View className="flex-1 items-center p-5 rounded-[32px] bg-stone-900/40 border border-white/5">
+                            <Text className="text-2xl font-black text-white">--</Text>
+                            <Text className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-1">Win Rate</Text>
                         </View>
-
-                        <View className="mt-6">
-                            <Text className="text-3xl font-black text-white tracking-tight">{currentUser.username}</Text>
-                            <View className="flex-row items-center gap-3 mt-2">
-                                <View className="bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                                    <Text className="text-amber-500 font-bold text-xs uppercase tracking-widest">{stats.rank}</Text>
-                                </View>
-                                <TouchableOpacity
-                                    onPress={copyId}
-                                    className="flex-row items-center gap-2 bg-stone-900/50 px-3 py-1 rounded-full border border-white/5"
-                                >
-                                    <Text className="text-white/40 font-medium tracking-widest text-xs uppercase">UID: {currentUser.strategoId || '———— ————'}</Text>
-                                    <Copy size={12} color="rgba(255,255,255,0.4)" />
-                                </TouchableOpacity>
-                            </View>
+                        <View className="flex-1 items-center p-5 rounded-[32px] bg-stone-900/40 border border-white/5">
+                            <Text className="text-2xl font-black text-white">0</Text>
+                            <Text className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-1">Games</Text>
+                        </View>
+                        <View className="flex-1 items-center p-5 rounded-[32px] bg-stone-900/40 border border-white/5">
+                            <Text className="text-2xl font-black text-white">1200</Text>
+                            <Text className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-1">Rating</Text>
                         </View>
                     </View>
                 </View>
 
-                <View className="px-6 mt-10 gap-10">
-                    {/* Performance Analysis Section */}
-                    <View>
-                        <View className="flex-row items-center justify-between mb-4">
-                            <View>
-                                <Text className="text-xl font-black text-white uppercase tracking-tighter">Performance Analysis</Text>
-                                <Text className="text-white/40 text-xs font-medium uppercase tracking-widest mt-1">AI vs Online Evolution</Text>
+                {/* Team Management */}
+                <View className="px-6 mt-10">
+                    <Text className="text-white/40 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Team Management</Text>
+                    <View className="bg-stone-900/40 rounded-[32px] border border-white/5 overflow-hidden">
+                        <TouchableOpacity
+                            onPress={() => router.push('/teams')}
+                            className="flex-row items-center gap-4 p-5 border-b border-white/5"
+                        >
+                            <View className="w-10 h-10 bg-blue-500/10 rounded-2xl items-center justify-center">
+                                <Trophy size={20} color="#3b82f6" />
                             </View>
-                            <View className="flex-row items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-white/5">
-                                <Trophy size={14} color="#f59e0b" />
-                                <Text className="text-white font-bold">{stats.elo}</Text>
-                            </View>
-                        </View>
+                            <Text className="flex-1 text-white font-bold text-base">My Teams</Text>
+                            <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
+                        </TouchableOpacity>
 
-                        <PerformanceChart data={performanceHistory} />
-
-                        <View className="flex-row gap-4 mt-4">
-                            <View className="flex-1 bg-stone-900/40 p-4 rounded-3xl border border-white/5">
-                                <Text className="text-white/30 text-[10px] font-black uppercase tracking-widest mb-1">AI Record</Text>
-                                <Text className="text-blue-400 text-lg font-black">{stats.aiWins}<Text className="text-white/20">W</Text> {stats.aiLosses}<Text className="text-white/20">L</Text></Text>
+                        <TouchableOpacity
+                            onPress={() => router.push('/teams/invitations')}
+                            className="flex-row items-center gap-4 p-5"
+                        >
+                            <View className="w-10 h-10 bg-amber-500/10 rounded-2xl items-center justify-center">
+                                <Copy size={20} color="#f59e0b" />
                             </View>
-                            <View className="flex-1 bg-stone-900/40 p-4 rounded-3xl border border-white/5">
-                                <Text className="text-white/30 text-[10px] font-black uppercase tracking-widest mb-1">Online Record</Text>
-                                <Text className="text-amber-500 text-lg font-black">{stats.onlineWins}<Text className="text-white/20">W</Text> {stats.onlineLosses}<Text className="text-white/20">L</Text></Text>
-                            </View>
-                        </View>
+                            <Text className="flex-1 text-white font-bold text-base">Team Invitations</Text>
+                            <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
+                        </TouchableOpacity>
                     </View>
+                </View>
 
-                    {/* Stats Grid */}
-                    <View className="flex-row gap-3">
-                        <View className="flex-1 items-center p-5 rounded-[32px] bg-stone-900/40 border border-white/5">
-                            <Text className="text-2xl font-black text-white">{stats.winRate}%</Text>
-                            <Text className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-1">Win Rate</Text>
-                        </View>
-                        <View className="flex-1 items-center p-5 rounded-[32px] bg-stone-900/40 border border-white/5">
-                            <Text className="text-2xl font-black text-white">{stats.gamesPlayed}</Text>
-                            <Text className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-1">Battles</Text>
-                        </View>
-                        <View className="flex-1 items-center p-5 rounded-[32px] bg-stone-900/40 border border-white/5">
-                            <Text className="text-2xl font-black text-white">{stats.puzzlesSolved}</Text>
-                            <Text className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-1">Puzzles</Text>
-                        </View>
+                {/* Preferences & Settings */}
+                <View className="px-6 mt-10">
+                    <Text className="text-white/40 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Preferences & Gear</Text>
+                    <View className="bg-stone-900/40 rounded-[32px] border border-white/5 overflow-hidden">
+                        <TouchableOpacity
+                            onPress={() => router.push('/onboarding')}
+                            className="flex-row items-center gap-4 p-5 border-b border-white/5"
+                        >
+                            <View className="w-10 h-10 bg-blue-500/10 rounded-2xl items-center justify-center">
+                                <ClipboardList size={20} color="#3b82f6" />
+                            </View>
+                            <Text className="flex-1 text-white font-bold text-base">Edit Onboarding Quiz</Text>
+                            <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity className="flex-row items-center gap-4 p-5 border-b border-white/5">
+                            <View className="w-10 h-10 bg-amber-500/10 rounded-2xl items-center justify-center">
+                                <ShieldCheck size={20} color="#f59e0b" />
+                            </View>
+                            <Text className="flex-1 text-white font-bold text-base">App Privacy & Security</Text>
+                            <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity className="flex-row items-center gap-4 p-5">
+                            <View className="w-10 h-10 bg-stone-500/10 rounded-2xl items-center justify-center">
+                                <Info size={20} color="rgba(255,255,255,0.4)" />
+                            </View>
+                            <Text className="flex-1 text-white font-bold text-base">About Strategos</Text>
+                            <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
+                        </TouchableOpacity>
                     </View>
+                </View>
 
-                    {/* Preferences & Settings */}
-                    <View>
-                        <Text className="text-white/40 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Preferences & Gear</Text>
-                        <View className="bg-stone-900/40 rounded-[32px] border border-white/5 overflow-hidden">
-                            <TouchableOpacity
-                                onPress={() => router.push('/onboarding')}
-                                className="flex-row items-center gap-4 p-5 border-b border-white/5"
-                            >
-                                <View className="w-10 h-10 bg-blue-500/10 rounded-2xl items-center justify-center">
-                                    <ClipboardList size={20} color="#3b82f6" />
-                                </View>
-                                <Text className="flex-1 text-white font-bold text-base">Edit Onboarding Quiz</Text>
-                                <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
-                            </TouchableOpacity>
-
-                            <TouchableOpacity className="flex-row items-center gap-4 p-5 border-b border-white/5">
-                                <View className="w-10 h-10 bg-amber-500/10 rounded-2xl items-center justify-center">
-                                    <ShieldCheck size={20} color="#f59e0b" />
-                                </View>
-                                <Text className="flex-1 text-white font-bold text-base">App Privacy & Security</Text>
-                                <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
-                            </TouchableOpacity>
-
-                            <TouchableOpacity className="flex-row items-center gap-4 p-5">
-                                <View className="w-10 h-10 bg-stone-500/10 rounded-2xl items-center justify-center">
-                                    <Info size={20} color="rgba(255,255,255,0.4)" />
-                                </View>
-                                <Text className="flex-1 text-white font-bold text-base">About Strategos</Text>
-                                <ChevronRight size={18} color="rgba(255,255,255,0.2)" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {/* Account Management */}
-                    <View>
-                        <Text className="text-white/40 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Account Ops</Text>
-                        <View className="gap-3">
-                            <TouchableOpacity
-                                onPress={handleLogout}
-                                className="flex-row items-center justify-center gap-3 p-5 rounded-[24px] bg-stone-900/40 border border-white/5 active:bg-amber-500/10"
-                            >
-                                <LogOut size={20} color="#f59e0b" />
-                                <Text className="text-amber-500 font-black uppercase tracking-widest text-sm">Sign Out Session</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={handleDeleteAccount}
-                                className="flex-row items-center justify-center gap-3 p-5 rounded-[24px] bg-red-500/5 border border-red-500/10 active:bg-red-500/20"
-                            >
-                                <Trash2 size={20} color="#ef4444" />
-                                <Text className="text-red-500 font-black uppercase tracking-widest text-sm">Delete Shadow Account</Text>
-                            </TouchableOpacity>
-                        </View>
+                {/* Account Management */}
+                <View className="px-6 mt-10 mb-6">
+                    <Text className="text-white/40 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-1">Account Ops</Text>
+                    <View className="gap-3">
+                        <TouchableOpacity
+                            onPress={handleLogout}
+                            className="flex-row items-center justify-center gap-3 p-5 rounded-[24px] bg-stone-900/40 border border-white/5 active:bg-amber-500/10"
+                        >
+                            <LogOut size={20} color="#f59e0b" />
+                            <Text className="text-amber-500 font-black uppercase tracking-widest text-sm">Sign Out Session</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </ScrollView>

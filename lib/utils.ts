@@ -5,8 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function generateStrategoId(): string {
-  // Generate a 10-digit random number as a string (Free Fire style)
-  const num = Math.floor(1000000000 + Math.random() * 9000000000);
-  return num.toString();
+export function generateFixedId(): string {
+  // Generate an 8-digit random number as a string
+  const num = Math.floor(10000000 + Math.random() * 90000000);
+  return num.toString().padStart(8, '0');
 }

@@ -2,7 +2,7 @@ import { PieceColor } from './chess';
 
 export interface SocialUser {
     id: string;
-    strategoId: string; // Unique ID (e.g., STR-8291)
+    fixed_id: string; // 8-digit unique ID
     username: string;
     avatar: string;
     elo?: number;

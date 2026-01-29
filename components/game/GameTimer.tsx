@@ -25,7 +25,8 @@ export function GameTimer({ whiteTime, blackTime, activeColor, onTimeExpired }: 
                 setDisplayWhiteTime((prev) => {
                     const newTime = Math.max(0, prev - 100);
                     if (newTime === 0) {
-                        onTimeExpired('white');
+                        // FIX: Use setTimeout to move the update out of the render/effect cycle
+                        setTimeout(() => onTimeExpired('white'), 0);
                     }
                     return newTime;
                 });
@@ -33,7 +34,8 @@ export function GameTimer({ whiteTime, blackTime, activeColor, onTimeExpired }: 
                 setDisplayBlackTime((prev) => {
                     const newTime = Math.max(0, prev - 100);
                     if (newTime === 0) {
-                        onTimeExpired('black');
+                        // FIX: Use setTimeout to move the update out of the render/effect cycle
+                        setTimeout(() => onTimeExpired('black'), 0);
                     }
                     return newTime;
                 });
