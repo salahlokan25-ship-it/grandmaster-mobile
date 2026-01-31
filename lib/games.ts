@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { UserProfile } from './auth'
+import { PieceType } from '@/types/chess'
 
 export interface GameInvitation {
     id: string
@@ -12,6 +13,14 @@ export interface GameInvitation {
     inviter?: UserProfile
 }
 
+export interface UserStats {
+    total_games: number
+    wins: number
+    losses: number
+    draws: number
+    win_rate: number
+}
+
 export interface ActiveGame {
     id: string
     white_player_id: string
@@ -20,6 +29,8 @@ export interface ActiveGame {
     last_move?: string
     last_move_at: string
     status: 'active' | 'completed' | 'draw'
+    white_time: number
+    black_time: number
     winner_id?: string
     updated_at: string
 }
@@ -163,22 +174,83 @@ export class GameService {
     }
 
     // Submit a move in an online game
-    static async submitOnlineMove(gameId: string, move: { from: any, to: any }, fen: string) {
+    static async submitOnlineMove(
+        gameId: string,
+        move: { from: any, to: any, promotion?: PieceType },
+        fen: string,
+        status: 'active' | 'completed' | 'draw' = 'active',
+        winnerId?: string,
+        whiteTime?: number,
+        blackTime?: number
+    ) {
         try {
+            const updateData: any = {
+                fen: fen,
+                last_move: JSON.stringify(move),
+                last_move_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                status: status
+            }
+
+            if (winnerId) updateData.winner_id = winnerId
+            if (whiteTime !== undefined) updateData.white_time = whiteTime
+            if (blackTime !== undefined) updateData.black_time = blackTime
+
             const { error } = await supabase
                 .from('active_games')
-                .update({
-                    fen: fen,
-                    last_move: JSON.stringify(move),
-                    last_move_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
+                .update(updateData)
                 .eq('id', gameId)
 
             if (error) throw error
+
+            // If game is completed, record it in match_history too
+            if (status === 'completed' || status === 'draw') {
+                const { data: gameData } = await supabase
+                    .from('active_games')
+                    .select('*')
+                    .eq('id', gameId)
+                    .single();
+
+                if (gameData) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const isWhite = gameData.white_player_id === user.id;
+                        const opponentId = isWhite ? gameData.black_player_id : gameData.white_player_id;
+                        const result = status === 'draw' ? 'draw' : (winnerId === user.id ? 'win' : 'loss');
+
+                        await this.recordMatchResult({
+                            user_id: user.id,
+                            game_mode: 'online',
+                            result,
+                            opponent_id: opponentId
+                        });
+                    }
+                }
+            }
         } catch (error) {
             console.error('[GameService] Error submitting move:', error)
             throw error
+        }
+    }
+
+    // Record a match result for tracking
+    static async recordMatchResult(data: {
+        user_id: string,
+        game_mode: 'online' | 'ai',
+        result: 'win' | 'loss' | 'draw',
+        opponent_id?: string,
+        ai_difficulty?: string
+    }) {
+        try {
+            const { error } = await supabase
+                .from('match_history')
+                .insert(data)
+
+            if (error) {
+                console.warn('[GameService] Error recording match result:', error.message)
+            }
+        } catch (error) {
+            console.error('[GameService] recordMatchResult error:', error)
         }
     }
 
@@ -218,6 +290,26 @@ export class GameService {
         }
     }
 
+    // Fetch user stats from the view
+    static async getUserStats() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return null
+
+            const { data, error } = await supabase
+                .from('user_stats')
+                .select('*')
+                .eq('user_id', user.id)
+                .maybeSingle()
+
+            if (error) throw error
+            return data as UserStats
+        } catch (error) {
+            console.error('[GameService] Error fetching stats:', error)
+            return null
+        }
+    }
+
     // Search for a user by fixed ID
     static async searchUserByUID(uid: string) {
         try {
@@ -235,6 +327,90 @@ export class GameService {
         } catch (error) {
             console.error('Search user by UID error:', error)
             return null
+        }
+    }
+
+    // Join matchmaking queue
+    static async joinMatchmaking() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) throw new Error('No authenticated user')
+
+            // 1. Try to find an existing waiting player
+            const { data: waitingPlayer, error: fetchError } = await supabase
+                .from('matchmaking_queue')
+                .select('*')
+                .eq('status', 'waiting')
+                .neq('user_id', user.id)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle()
+
+            if (waitingPlayer) {
+                // 2. Found someone! Let's try to match with them
+                // Create the game session first
+                const { data: game, error: gameError } = await supabase
+                    .from('active_games')
+                    .insert({
+                        white_player_id: waitingPlayer.user_id,
+                        black_player_id: user.id, // Current user is Black
+                        status: 'active'
+                    })
+                    .select()
+                    .single()
+
+                if (gameError) throw gameError
+
+                // 3. Atomically update the waiting entry to 'matched'
+                const { data: matchedEntry, error: matchError } = await supabase
+                    .from('matchmaking_queue')
+                    .update({
+                        status: 'matched',
+                        matched_game_id: (game as any).id
+                    })
+                    .eq('id', waitingPlayer.id)
+                    .eq('status', 'waiting') // Safety check
+                    .select()
+                    .maybeSingle()
+
+                if (matchedEntry) {
+                    // Success! We are matched
+                    return { gameId: (game as any).id, color: 'black' }
+                } else {
+                    // Someone else grabbed them or they cancelled.
+                    // Fallback to joining the queue
+                }
+            }
+
+            // 4. No one available or claim failed, join the queue as a waiter
+            const { data: queueEntry, error: queueError } = await supabase
+                .from('matchmaking_queue')
+                .insert({ user_id: user.id, status: 'waiting' })
+                .select()
+                .single()
+
+            if (queueError) throw queueError
+
+            return { queueId: queueEntry.id, color: 'white' }
+        } catch (error) {
+            console.error('[GameService] Matchmaking error:', error)
+            throw error
+        }
+    }
+
+    // Leave matchmaking queue
+    static async leaveMatchmaking() {
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            await supabase
+                .from('matchmaking_queue')
+                .delete()
+                .eq('user_id', user.id)
+                .eq('status', 'waiting')
+        } catch (error) {
+            console.error('[GameService] Leave matchmaking error:', error)
         }
     }
 }

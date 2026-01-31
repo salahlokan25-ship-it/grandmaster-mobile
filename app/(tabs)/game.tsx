@@ -9,6 +9,8 @@ import { GameTimer } from '../../components/game/GameTimer';
 import { useGameStore } from '../../stores/gameStore';
 import { cn } from '../../lib/utils';
 import { GameOverModal } from '../../components/game/GameOverModal';
+import { PromotionModal } from '../../components/game/PromotionModal';
+import { InGameChat } from '../../components/game/InGameChat';
 import { supabase } from '../../lib/supabase';
 import { PieceColor } from '../../types/chess';
 
@@ -27,7 +29,11 @@ export default function GamePage() {
         toggleSpeech,
         initOnlineGame,
         syncOnlineMove,
-        userColor
+        userColor,
+        isPromotionModalVisible,
+        completePromotion,
+        toggleChat,
+        addMessage
     } = useGameStore();
 
     const { gameId, color } = useLocalSearchParams<{ gameId: string, color: string }>();
@@ -65,8 +71,12 @@ export default function GamePage() {
                             // Only sync if the move wasn't made by the current user
                             const lastTurn = gameState.currentTurn === 'white' ? 'black' : 'white';
                             if (gameState.currentTurn !== userColor) {
-                                console.log('[GamePage] Synchronizing opponent move:', moveData);
-                                syncOnlineMove(moveData);
+                                console.log('[GamePage] Synchronizing opponent move and timers:', moveData);
+                                const times = {
+                                    white: payload.new.white_time,
+                                    black: payload.new.black_time
+                                };
+                                syncOnlineMove(moveData, times);
                             }
                         } catch (e) {
                             console.error('[GamePage] Failed to process move data:', e);
@@ -83,6 +93,32 @@ export default function GamePage() {
             supabase.removeChannel(channel);
         };
     }, [gameMode, gameId, userColor, gameState.currentTurn]);
+
+    // Setup real-time message listener
+    useEffect(() => {
+        if (gameMode !== 'online' || !gameId) return;
+
+        const channel = supabase
+            .channel(`messages:${gameId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'game_messages',
+                    filter: `game_id=eq.${gameId}`
+                },
+                (payload) => {
+                    console.log('[GamePage] New message received:', payload);
+                    addMessage(payload.new as any);
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [gameMode, gameId]);
 
     const winner = useMemo(() => {
         if (gameState.isCheckmate) {
@@ -123,14 +159,18 @@ export default function GamePage() {
 
                 <View className="flex-1 flex-col px-4">
                     {/* Opponent Info */}
-                    <View className="bg-card rounded-2xl p-3 flex-row items-center justify-between mb-4 border border-border/50">
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => toggleChat(true)}
+                        className="bg-card rounded-2xl p-3 flex-row items-center justify-between mb-4 border border-border/50"
+                    >
                         <View className="flex-row items-center gap-3">
                             <ChessAvatar size="md" fallback={gameMode === 'ai' ? 'AI' : 'O'} isOnline />
                             <View>
                                 <Text className="font-semibold text-foreground">{gameMode === 'ai' ? 'Stockfish' : 'Opponent'}</Text>
                                 <View className="flex-row items-center gap-1">
                                     <Text className="text-sm text-muted-foreground">2800</Text>
-                                    <Text className="text-sm text-green-500">• Online</Text>
+                                    <Text className="text-sm text-green-500">• Tactical Link</Text>
                                 </View>
                             </View>
                         </View>
@@ -138,7 +178,7 @@ export default function GamePage() {
                             <Clock size={16} className="text-muted-foreground" color="hsl(30 15% 75%)" />
                             <Text className="font-mono font-bold text-foreground">{formatTime(gameState.blackTime)}</Text>
                         </View>
-                    </View>
+                    </TouchableOpacity>
 
                     {/* Game Timer */}
                     <GameTimer
@@ -146,6 +186,7 @@ export default function GamePage() {
                         blackTime={blackTimeRemaining}
                         activeColor={gameState.currentTurn}
                         onTimeExpired={handleTimeExpired}
+                        isPaused={!!winner}
                     />
 
                     {/* Chess Board */}
@@ -158,48 +199,40 @@ export default function GamePage() {
                         />
                     </View>
 
-                    {/* Bottom Controls */}
-                    <View className="mt-auto pt-4 pb-8">
-                        <View className="flex-row items-center justify-center gap-2 bg-card rounded-2xl p-2 border border-border/50">
-                            {gameMode === 'ai' && (
-                                <>
-                                    <TouchableOpacity onPress={undoMove} className="flex-1 flex-col items-center gap-1 px-2 py-2">
-                                        <RotateCcw size={20} className="text-muted-foreground" color="hsl(30 15% 75%)" />
-                                        <Text className="text-xs text-muted-foreground">Undo</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={getHint} className="flex-1 flex-col items-center gap-1 px-2 py-2">
-                                        <Lightbulb size={20} className="text-amber-500" color="#f59e0b" />
-                                        <Text className="text-xs text-muted-foreground">Hint</Text>
-                                    </TouchableOpacity>
-                                </>
-                            )}
-
-                            <TouchableOpacity
-                                onPress={() => Alert.alert('Menu', 'Game settings and analysis coming soon!')}
-                                className="w-16 h-16 rounded-full bg-primary flex-col items-center justify-center gap-1 mx-2 shadow-lg"
-                                style={{ elevation: 5 }}
-                            >
-                                <View className="w-8 h-1 bg-white rounded-full" />
-                                <View className="w-8 h-1 bg-white rounded-full" />
-                            </TouchableOpacity>
-
-                            <TouchableOpacity className="flex-1 flex-col items-center gap-1 px-2 py-2">
-                                <MessageSquare size={20} className="text-muted-foreground" color="hsl(30 15% 75%)" />
-                                <Text className="text-xs text-muted-foreground">Chat</Text>
-                            </TouchableOpacity>
-
-                            {gameMode === 'ai' ? (
-                                <TouchableOpacity onPress={resetGame} className="flex-1 flex-col items-center gap-1 px-2 py-2">
-                                    <RotateCcw size={20} className="text-primary" color="#f59e0b" />
-                                    <Text className="text-xs text-muted-foreground">Reload</Text>
-                                </TouchableOpacity>
-                            ) : (
-                                <View className="flex-1" />
-                            )}
+                    {/* Self Info (Added current player card at bottom of board) */}
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => toggleChat(true)}
+                        className="bg-card rounded-2xl p-3 flex-row items-center justify-between border border-border/50"
+                    >
+                        <View className="flex-row items-center gap-3">
+                            <ChessAvatar size="md" fallback={userColor === 'white' ? 'W' : 'B'} isOnline />
+                            <View>
+                                <Text className="font-semibold text-foreground">You</Text>
+                                <View className="flex-row items-center gap-1">
+                                    <Text className="text-sm text-muted-foreground">{userColor?.toUpperCase()}</Text>
+                                    <Text className="text-sm text-primary">• Active</Text>
+                                </View>
+                            </View>
                         </View>
-                    </View>
+                        <View className="flex-row items-center gap-2 px-4 py-2 rounded-full bg-secondary">
+                            <Clock size={16} className="text-muted-foreground" color="hsl(30 15% 75%)" />
+                            <Text className="font-mono font-bold text-foreground">{formatTime(gameState.whiteTime)}</Text>
+                        </View>
+                    </TouchableOpacity>
+
                 </View>
             </View>
+
+            {/* Promotion Modal */}
+            <PromotionModal
+                visible={isPromotionModalVisible}
+                color={gameState.currentTurn}
+                onSelect={completePromotion}
+            />
+
+            {/* In-Game Chat Overlay */}
+            <InGameChat />
 
             {/* Game Over Modal */}
             <GameOverModal

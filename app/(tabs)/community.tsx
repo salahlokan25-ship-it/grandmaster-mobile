@@ -30,6 +30,7 @@ import { UserProfile } from '../../lib/auth'
 import * as Clipboard from 'expo-clipboard'
 import Animated, { FadeInRight, FadeInUp, Layout, FadeInDown } from 'react-native-reanimated'
 import { Hash, Play, UserPlus2, Check, X } from 'lucide-react-native'
+import { MatchmakingModal } from '../../components/game/MatchmakingModal'
 
 export default function CommunityPage() {
     const router = useRouter()
@@ -53,6 +54,9 @@ export default function CommunityPage() {
     const [joinId, setJoinId] = useState('')
     const [busy, setBusy] = useState(false)
     const [refreshing, setRefreshing] = useState(false)
+
+    // Matchmaking State
+    const [isMatchmakingVisible, setMatchmakingVisible] = useState(false)
 
     useEffect(() => {
         loadData()
@@ -245,6 +249,14 @@ export default function CommunityPage() {
         } finally {
             setBusy(false)
         }
+    }
+
+    const handleCancelMatchmaking = () => {
+        setMatchmakingVisible(false)
+    }
+
+    const handleStartMatchmaking = () => {
+        setMatchmakingVisible(true)
     }
 
     const copyId = async () => {
@@ -469,9 +481,13 @@ export default function CommunityPage() {
                     <View className="px-6 mb-8">
                         <View className="flex-row items-center justify-between mb-4">
                             <Text className="text-lg font-bold text-foreground">Active Personnel</Text>
-                            <View className="px-3 py-1 bg-secondary rounded-full">
-                                <Text className="text-xs text-muted-foreground font-bold">{friends.length} Officers</Text>
-                            </View>
+                            <TouchableOpacity
+                                onPress={handleStartMatchmaking}
+                                className="flex-row items-center gap-2 bg-amber-500/10 px-4 py-2 rounded-xl border border-amber-500/20"
+                            >
+                                <Play size={12} color="#f59e0b" fill="#f59e0b" />
+                                <Text className="text-[10px] text-amber-500 uppercase tracking-widest font-black">Play Online</Text>
+                            </TouchableOpacity>
                         </View>
 
                         {loading ? (
@@ -715,6 +731,11 @@ export default function CommunityPage() {
                     </Animated.View>
                 </KeyboardAvoidingView>
             </Modal>
+
+            <MatchmakingModal
+                visible={isMatchmakingVisible}
+                onCancel={handleCancelMatchmaking}
+            />
         </SafeAreaView >
     )
 }

@@ -43,6 +43,15 @@ export interface TeamJoinRequest {
   requester?: UserProfile
 }
 
+export interface TeamMessage {
+  id: string
+  team_id: string
+  sender_id: string
+  content: string
+  created_at: string
+  sender?: UserProfile
+}
+
 export class TeamService {
   // Create a new team
   static async createTeam(name: string, description?: string) {
@@ -99,6 +108,23 @@ export class TeamService {
     } catch (error) {
       console.error('Get user teams error:', error)
       return []
+    }
+  }
+
+  // Get team by ID
+  static async getTeamById(teamId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('id', teamId)
+        .single()
+
+      if (error) throw error
+      return data as Team
+    } catch (error) {
+      console.error('Get team by ID error:', error)
+      return null
     }
   }
 
@@ -399,5 +425,86 @@ export class TeamService {
       console.error('Remove team member error:', error)
       throw error
     }
+  }
+
+  // Send a message to the team
+  static async sendTeamMessage(teamId: string, content: string) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No authenticated user')
+
+      const { data, error } = await supabase
+        .from('team_messages')
+        .insert({
+          team_id: teamId,
+          sender_id: user.id,
+          content,
+        })
+        .select(`
+          *,
+          sender:users(*)
+        `)
+        .single()
+
+      if (error) throw error
+
+      return data as TeamMessage
+    } catch (error) {
+      console.error('Send team message error:', error)
+      throw error
+    }
+  }
+
+  // Get team messages
+  static async getTeamMessages(teamId: string, limit: number = 50) {
+    try {
+      const { data, error } = await supabase
+        .from('team_messages')
+        .select(`
+          *,
+          sender:users(*)
+        `)
+        .eq('team_id', teamId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (error) throw error
+
+      return (data as TeamMessage[]).reverse()
+    } catch (error) {
+      console.error('Get team messages error:', error)
+      return []
+    }
+  }
+
+  // Subscribe to team messages
+  static subscribeToTeamMessages(teamId: string, onMessage: (message: TeamMessage) => void) {
+    return supabase
+      .channel(`team_messages:${teamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'team_messages',
+          filter: `team_id=eq.${teamId}`,
+        },
+        async (payload) => {
+          // Fetch the full message with sender info
+          const { data, error } = await supabase
+            .from('team_messages')
+            .select(`
+              *,
+              sender:users(*)
+            `)
+            .eq('id', payload.new.id)
+            .single()
+
+          if (!error && data) {
+            onMessage(data as TeamMessage)
+          }
+        }
+      )
+      .subscribe()
   }
 }

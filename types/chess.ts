@@ -18,6 +18,7 @@ export interface Move {
   piece: Piece;
   captured?: Piece;
   notation: string;
+  promotion?: PieceType;
 }
 
 export interface Player {
@@ -112,3 +113,11 @@ export interface MatchHistoryItem {
 
 export type TimeControl = 'bullet' | 'blitz' | 'rapid' | 'classical';
 export type AIDifficulty = 'beginner' | 'apprentice' | 'casual' | 'amateur' | 'intermediate' | 'advanced' | 'professional' | 'legend';
+
+export interface ChatMessage {
+  id: string;
+  game_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+}

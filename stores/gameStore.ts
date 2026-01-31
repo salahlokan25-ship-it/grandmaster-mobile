@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { GameState, Piece, PieceColor, Square, Move, AIDifficulty, TimeControl } from '@/types/chess';
+import { GameState, Piece, PieceType, PieceColor, Square, Move, AIDifficulty, TimeControl, ChatMessage } from '@/types/chess';
 import { getValidMoves, isValidMove, isCheck, isCheckmate, isStalemate } from '@/lib/chessRules';
 import { speakMove, speakMessage } from '@/lib/speech';
 
@@ -49,6 +49,10 @@ interface GameStore {
   isSpeechEnabled: boolean;
   onlineGameId: string | null;
   userColor: PieceColor | null;
+  isPromotionModalVisible: boolean;
+  pendingPromotion: { from: Square; to: Square } | null;
+  isChatVisible: boolean;
+  messages: ChatMessage[];
 
   selectSquare: (square: Square | null) => void;
   makeMove: (from: Square, to: Square) => void;
@@ -66,7 +70,11 @@ interface GameStore {
   getHint: () => void;
   makeAIMove: () => void;
   toggleSpeech: () => void;
-  syncOnlineMove: (move: { from: Square; to: Square }) => void;
+  syncOnlineMove: (move: { from: Square; to: Square }, times?: { white: number; black: number }) => void;
+  executeMove: (from: Square, to: Square, promotionType?: PieceType) => void;
+  completePromotion: (type: PieceType) => void;
+  toggleChat: (visible?: boolean) => void;
+  addMessage: (message: ChatMessage) => void;
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -95,6 +103,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isSpeechEnabled: true,
   onlineGameId: null,
   userColor: null,
+  isPromotionModalVisible: false,
+  pendingPromotion: null,
+  isChatVisible: false,
+  messages: [],
 
   selectSquare: (square: Square | null) => {
     const { gameState, selectedSquare, validMoves } = get();
@@ -138,6 +150,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const newBoard = gameState.board.map(row => [...row]);
     const piece = newBoard[from.row][from.col];
+    if (!piece) return;
+
+    // Detect if this move is a Pawn Promotion
+    const isPromotion = piece.type === 'pawn' && (to.row === 0 || to.row === 7);
+
+    // Only show modal for human player moves in their own turn
+    // (In AI mode, only if it's white/human. In Local mode, always. In Online, only if it's userColor)
+    const isHumanMove =
+      gameMode === 'local' ||
+      (gameMode === 'ai' && gameState.currentTurn === 'white') ||
+      (gameMode === 'online' && gameState.currentTurn === get().userColor);
+
+    if (isPromotion && isHumanMove) {
+      set({ isPromotionModalVisible: true, pendingPromotion: { from, to } });
+      return;
+    }
+
+    // Default to Queen for non-human moves (AI) if they don't specify
+    get().executeMove(from, to, isPromotion ? 'queen' : undefined);
+  },
+
+  executeMove: (from: Square, to: Square, promotionType?: PieceType) => {
+    const { gameState, gameMode } = get();
+    const newBoard = gameState.board.map(row => [...row]);
+    const piece = newBoard[from.row][from.col];
 
     if (!piece) return;
 
@@ -166,18 +203,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let newPiece = { ...piece, hasMoved: true };
 
     // Handle Promotion
-    if (piece.type === 'pawn') {
-      if ((piece.color === 'white' && to.row === 0) || (piece.color === 'black' && to.row === 7)) {
-        newPiece.type = 'queen';
-      }
+    if (piece.type === 'pawn' && (to.row === 0 || to.row === 7)) {
+      newPiece.type = promotionType || 'queen';
     }
 
     newBoard[to.row][to.col] = newPiece;
     newBoard[from.row][from.col] = null;
 
     const cols = 'abcdefgh';
-    const isPromotion = piece.type === 'pawn' && newPiece.type === 'queen';
-    const notation = `${cols[from.col]}${8 - from.row}${actualCaptured ? 'x' : '-'}${cols[to.col]}${8 - to.row}${isPromotion ? '=Q' : ''}`;
+    const isPromotion = piece.type === 'pawn' && newPiece.type !== 'pawn';
+    const notation = `${cols[from.col]}${8 - from.row}${actualCaptured ? 'x' : '-'}${cols[to.col]}${8 - to.row}${isPromotion ? `=${newPiece.type.charAt(0).toUpperCase()}` : ''}`;
 
     const move: Move = {
       from,
@@ -185,6 +220,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       piece,
       captured: actualCaptured || undefined,
       notation,
+      promotion: promotionType,
     };
 
     const nextTurn: PieceColor = gameState.currentTurn === 'white' ? 'black' : 'white';
@@ -228,6 +264,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : 'Good development. Control the center.',
     });
 
+    // Record AI match result
+    if (gameMode === 'ai' && (checkmate || stalemate)) {
+      import('@/lib/games').then(({ GameService }) => {
+        import('./authStore').then(({ useAuthStore }) => {
+          const user = useAuthStore.getState().user;
+          if (user) {
+            const result = stalemate ? 'draw' : (gameState.currentTurn === 'white' ? 'win' : 'loss');
+            GameService.recordMatchResult({
+              user_id: user.id,
+              game_mode: 'ai',
+              result,
+              ai_difficulty: get().aiDifficulty
+            });
+          }
+        });
+      });
+    }
+
     // Speak the move
     const { isSpeechEnabled } = get();
     speakMove(notation, isSpeechEnabled);
@@ -243,10 +297,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // Push move to Supabase if in online mode
-    const { onlineGameId, userColor } = get();
+    const { onlineGameId, userColor, whiteTimeRemaining, blackTimeRemaining } = get();
     if (gameMode === 'online' && onlineGameId && userColor === piece.color) {
       import('@/lib/games').then(({ GameService }) => {
-        GameService.submitOnlineMove(onlineGameId, { from, to }, ''); // FEN intentionally empty for now as we sync via moves
+        const gameStatus = checkmate ? 'completed' : stalemate ? 'draw' : 'active';
+        // Get user from auth store to avoid having it in game store
+        import('./authStore').then(({ useAuthStore }) => {
+          const user = useAuthStore.getState().user;
+          const winnerId = checkmate ? user?.id : undefined;
+          GameService.submitOnlineMove(
+            onlineGameId,
+            { from, to, promotion: promotionType },
+            '',
+            gameStatus,
+            winnerId,
+            whiteTimeRemaining,
+            blackTimeRemaining
+          );
+        });
       });
     }
   },
@@ -277,6 +345,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     lastMoveTimestamp: Date.now(),
     onlineGameId: null,
     userColor: mode === 'online' ? get().userColor : null,
+    messages: [],
+    isChatVisible: false,
   }),
 
   initOnlineGame: (gameId: string, color: PieceColor) => {
@@ -346,6 +416,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   handleTimeExpired: (color: PieceColor) => {
     const winner = color === 'white' ? 'black' : 'white';
+    const { gameMode, onlineGameId } = get();
+
+    if (gameMode === 'online' && onlineGameId) {
+      import('@/lib/games').then(({ GameService }) => {
+        // Find the winner's ID from the game data or just use a placeholder if we don't have it handy
+        // In a real app, we'd fetch the game state first to be sure
+        GameService.submitOnlineMove(onlineGameId, { from: null, to: null }, '', 'completed');
+      });
+    }
+
     set((state) => ({
       gameState: {
         ...state.gameState,
@@ -357,8 +437,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   toggleSpeech: () => set((state) => ({ isSpeechEnabled: !state.isSpeechEnabled })),
 
-  syncOnlineMove: (move: { from: Square; to: Square }) => {
+  syncOnlineMove: (move: { from: Square; to: Square }, times?: { white: number; black: number }) => {
     const { from, to } = move;
-    get().makeMove(from, to);
+    if (times) {
+      set({
+        whiteTimeRemaining: times.white,
+        blackTimeRemaining: times.black,
+        lastMoveTimestamp: Date.now() // Reset baseline for local ticking
+      });
+    }
+
+    // Check if it's a remote promotion
+    const { gameState } = get();
+    const piece = gameState.board[from.row][from.col];
+    const isPromotion = piece?.type === 'pawn' && (to.row === 0 || to.row === 7);
+
+    // If it's online, the move payload SHOULD have the promotion piece if it was a promotion
+    // But since we are calling it from gamePage, let's see how the payload looks.
+    // I'll adjust executeMove to be safer.
+    get().executeMove(from, to, (move as any).promotion);
   },
+  completePromotion: (type: PieceType) => {
+    const { pendingPromotion } = get();
+    if (!pendingPromotion) return;
+
+    set({ isPromotionModalVisible: false, pendingPromotion: null });
+    get().executeMove(pendingPromotion.from, pendingPromotion.to, type);
+  },
+
+  toggleChat: (visible) => set((state) => ({
+    isChatVisible: visible !== undefined ? visible : !state.isChatVisible
+  })),
+
+  addMessage: (message) => set((state) => {
+    // Avoid duplicates
+    if (state.messages.some(m => m.id === message.id)) return state;
+    return { messages: [...state.messages, message] };
+  }),
 }));

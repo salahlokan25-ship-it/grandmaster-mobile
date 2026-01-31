@@ -7,6 +7,7 @@ import { IconButton } from '../../components/ui/IconButton';
 import { AIGameSetupModal } from '../../components/game/AIGameSetupModal';
 import { MatchmakingModal } from '../../components/game/MatchmakingModal';
 import { useGameStore } from '../../stores/gameStore';
+import { useAuthStore } from '../../stores/authStore';
 import { useState } from 'react';
 import type { AIDifficulty } from '../../types/chess';
 
@@ -17,8 +18,13 @@ const chessPiecesLight = require('../../assets/chess-pieces-light.jpg');
 export default function HomePage() {
     const router = useRouter();
     const { startNewGame, setAIDifficulty } = useGameStore();
+    const { profile, stats, refreshStats } = useAuthStore();
     const [showAISetup, setShowAISetup] = useState(false);
     const [showMatchmaking, setShowMatchmaking] = useState(false);
+
+    const displayName = profile?.display_name || profile?.username || 'Grandmaster';
+    const hours = new Date().getHours();
+    const greeting = hours < 12 ? 'Good Morning' : hours < 18 ? 'Good Afternoon' : 'Good Evening';
 
     return (
         <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -27,16 +33,16 @@ export default function HomePage() {
                 <View className="flex-row items-center justify-between px-4 py-4">
                     <View className="flex-row items-center gap-3">
                         <View className="relative">
-                            <View className="w-12 h-12 rounded-full bg-amber-200 overflow-hidden items-center justify-center">
-                                <View className="w-full h-full bg-amber-100 items-center justify-center">
-                                    <Text className="text-2xl">👨</Text>
-                                </View>
-                            </View>
+                            <ChessAvatar
+                                size="lg"
+                                src={profile?.avatar_url}
+                                fallback={displayName.charAt(0)}
+                            />
                             <View className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-background" />
                         </View>
                         <View>
-                            <Text className="text-xs text-muted-foreground uppercase tracking-wide">Good Morning</Text>
-                            <Text className="text-lg font-bold text-foreground">Alex</Text>
+                            <Text className="text-xs text-muted-foreground uppercase tracking-[2px] font-black">{greeting}</Text>
+                            <Text className="text-xl font-black text-foreground italic lowercase">{displayName}</Text>
                         </View>
                     </View>
                     <IconButton icon={Bell} badge={1} />
@@ -52,39 +58,42 @@ export default function HomePage() {
                                 </View>
                                 <View>
                                     <View className="flex-row items-center gap-2">
-                                        <Text className="text-3xl font-bold text-foreground">1250</Text>
+                                        <Text className="text-3xl font-bold text-foreground">1200</Text>
                                         <Text className="text-sm text-muted-foreground">ELO</Text>
                                     </View>
-                                    <Text className="text-sm text-muted-foreground">Knight III</Text>
+                                    <Text className="text-sm text-muted-foreground">Knight I</Text>
                                 </View>
                             </View>
                             <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20">
                                 <Flame size={16} className="text-amber-400" color="#fbbf24" fill="#fbbf24" />
-                                <Text className="text-sm font-semibold text-amber-400">5 Days</Text>
+                                <Text className="text-sm font-semibold text-amber-400">Streak: {stats?.wins || 0}</Text>
                             </View>
                         </View>
 
                         <View className="mb-4">
                             <View className="flex-row justify-between items-center mb-1.5">
                                 <Text className="text-sm text-muted-foreground">Progress to Bishop Rank</Text>
-                                <Text className="text-sm font-medium text-primary">90/120 XP</Text>
+                                <Text className="text-sm font-medium text-primary">{Math.min(100, (stats?.total_games || 0) * 10)} / 100 XP</Text>
                             </View>
                             <View className="h-2 rounded-full bg-muted overflow-hidden">
-                                <View className="h-full rounded-full bg-primary" style={{ width: '75%' }} />
+                                <View
+                                    className="h-full rounded-full bg-primary"
+                                    style={{ width: `${Math.min(100, (stats?.total_games || 0) * 10)}%` }}
+                                />
                             </View>
                         </View>
 
                         <View className="flex-row gap-3">
                             <View className="flex-1 items-center p-3 rounded-xl bg-muted/30">
-                                <Text className="text-2xl font-bold text-foreground">142</Text>
+                                <Text className="text-2xl font-bold text-foreground">{stats?.wins || 0}</Text>
                                 <Text className="text-xs text-muted-foreground uppercase">Won</Text>
                             </View>
                             <View className="flex-1 items-center p-3 rounded-xl bg-muted/30">
-                                <Text className="text-2xl font-bold text-foreground">84</Text>
+                                <Text className="text-2xl font-bold text-foreground">{stats?.losses || 0}</Text>
                                 <Text className="text-xs text-muted-foreground uppercase">Lost</Text>
                             </View>
                             <View className="flex-1 items-center p-3 rounded-xl bg-muted/30">
-                                <Text className="text-2xl font-bold text-foreground">58%</Text>
+                                <Text className="text-2xl font-bold text-foreground">{stats?.win_rate || 0}%</Text>
                                 <Text className="text-xs text-muted-foreground uppercase">Win Rate</Text>
                             </View>
                         </View>
@@ -98,35 +107,37 @@ export default function HomePage() {
                         </View>
 
                         {/* Main Actions */}
-                        <View className="gap-3">
+                        <View className="flex-row gap-4">
                             <TouchableOpacity
                                 onPress={() => setShowMatchmaking(true)}
-                                className="w-full h-48 rounded-2xl overflow-hidden active:opacity-90"
+                                className="flex-1 h-56 rounded-[32px] overflow-hidden active:opacity-90 shadow-2xl border border-white/10"
                             >
-                                <Image source={chessHero} className="w-full h-full" resizeMode="cover" />
-                                <View className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/20 items-center justify-center">
-                                    <View className="items-center gap-2">
-                                        <View className="w-16 h-16 rounded-full bg-primary/20 items-center justify-center backdrop-blur-sm">
-                                            <Globe size={32} color="hsl(24 100% 45%)" />
-                                        </View>
-                                        <Text className="text-2xl font-bold text-white">Play Online</Text>
-                                        <Text className="text-sm text-white/80">Challenge players worldwide</Text>
+                                <Image source={chessHero} className="absolute inset-0 w-full h-full" resizeMode="cover" />
+                                <View className="absolute inset-0 bg-stone-900/40" />
+                                <View className="flex-1 p-5 justify-between">
+                                    <View className="w-12 h-12 rounded-2xl bg-amber-600 items-center justify-center shadow-lg">
+                                        <Globe size={24} color="white" />
+                                    </View>
+                                    <View>
+                                        <Text className="text-2xl font-black text-white italic lowercase">Play Online</Text>
+                                        <Text className="text-xs text-white/60 font-medium mt-1">Global Matchmaking</Text>
                                     </View>
                                 </View>
                             </TouchableOpacity>
 
                             <TouchableOpacity
                                 onPress={() => setShowAISetup(true)}
-                                className="w-full h-48 rounded-2xl overflow-hidden active:opacity-90"
+                                className="flex-1 h-56 rounded-[32px] overflow-hidden active:opacity-90 shadow-2xl border border-white/10"
                             >
-                                <Image source={chessPiecesLight} className="w-full h-full" resizeMode="cover" />
-                                <View className="absolute inset-0 bg-gradient-to-t from-black/80 to-black/20 items-center justify-center">
-                                    <View className="items-center gap-2">
-                                        <View className="w-16 h-16 rounded-full bg-amber-600/30 items-center justify-center backdrop-blur-sm">
-                                            <Bot size={32} color="#f59e0b" />
-                                        </View>
-                                        <Text className="text-2xl font-bold text-white">Play vs AI</Text>
-                                        <Text className="text-sm text-white/80">Practice against computer</Text>
+                                <Image source={chessPiecesLight} className="absolute inset-0 w-full h-full" resizeMode="cover" />
+                                <View className="absolute inset-0 bg-stone-900/40" />
+                                <View className="flex-1 p-5 justify-between">
+                                    <View className="w-12 h-12 rounded-2xl bg-stone-800 items-center justify-center shadow-lg border border-white/5">
+                                        <Bot size={24} color="#f59e0b" />
+                                    </View>
+                                    <View>
+                                        <Text className="text-2xl font-black text-white italic lowercase">Play vs AI</Text>
+                                        <Text className="text-xs text-white/60 font-medium mt-1">Master the game</Text>
                                     </View>
                                 </View>
                             </TouchableOpacity>
@@ -209,6 +220,6 @@ export default function HomePage() {
                 visible={showMatchmaking}
                 onCancel={() => setShowMatchmaking(false)}
             />
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }

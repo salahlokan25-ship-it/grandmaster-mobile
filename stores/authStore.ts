@@ -4,12 +4,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AuthService, UserProfile } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { User, AuthChangeEvent, Session } from '@supabase/supabase-js'
+import { GameService, UserStats } from '../lib/games'
 
 interface AuthState {
   user: User | null
   profile: UserProfile | null
   isLoading: boolean
   isAuthenticated: boolean
+  stats: UserStats | null
+  refreshStats: () => Promise<void>
   signUp: (email: string, password: string, username: string, displayName?: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -24,6 +27,16 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       isLoading: true,
       isAuthenticated: false,
+      stats: null,
+
+      refreshStats: async () => {
+        try {
+          const stats = await GameService.getUserStats()
+          set({ stats })
+        } catch (error) {
+          console.warn('Failed to refresh stats:', error)
+        }
+      },
 
       signUp: async (email: string, password: string, username: string, displayName?: string) => {
         set({ isLoading: true })
@@ -95,6 +108,8 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
             })
+            // Fetch stats in parallel
+            get().refreshStats()
           } else {
             set({
               user: null,

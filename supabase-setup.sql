@@ -315,6 +315,8 @@ CREATE TABLE IF NOT EXISTS public.active_games (
   last_move TEXT,
   last_move_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   status VARCHAR(50) DEFAULT 'active', -- 'active', 'completed', 'draw'
+  white_time INT DEFAULT 600000, -- 10 minutes in ms
+  black_time INT DEFAULT 600000, -- 10 minutes in ms
   winner_id UUID REFERENCES public.users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -336,8 +338,72 @@ DROP POLICY IF EXISTS "Players can create their active games" ON public.active_g
 CREATE POLICY "Players can create their active games" ON public.active_games
     FOR INSERT WITH CHECK (white_player_id = auth.uid() OR black_player_id = auth.uid());
 
--- Add to Realtime Publication
-ALTER PUBLICATION supabase_realtime ADD TABLE public.active_games;
+-- Add to Realtime Publication safely
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'active_games'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.active_games;
+    END IF;
+END $$;
+
+NOTIFY pgrst, 'reload schema';
+
+-- 10. Matchmaking Queue
+CREATE TABLE IF NOT EXISTS public.matchmaking_queue (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  status VARCHAR(50) DEFAULT 'waiting', -- 'waiting', 'matched', 'cancelled'
+  matched_game_id UUID REFERENCES public.active_games(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE public.matchmaking_queue ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+DROP POLICY IF EXISTS "Users can only see their own queue entries" ON public.matchmaking_queue;
+CREATE POLICY "Users can only see their own queue entries" ON public.matchmaking_queue
+    FOR SELECT USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can insert their own queue entries" ON public.matchmaking_queue;
+CREATE POLICY "Users can insert their own queue entries" ON public.matchmaking_queue
+    FOR INSERT WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can update their own queue entries" ON public.matchmaking_queue;
+CREATE POLICY "Users can update their own queue entries" ON public.matchmaking_queue
+    FOR UPDATE USING (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can delete their own queue entries" ON public.matchmaking_queue;
+CREATE POLICY "Users can delete their own queue entries" ON public.matchmaking_queue
+    FOR DELETE USING (user_id = auth.uid());
+
+-- Allow anyone to see ANY waiting entry for matchmaking
+DROP POLICY IF EXISTS "Anyone can see waiting players" ON public.matchmaking_queue;
+CREATE POLICY "Anyone can see waiting players" ON public.matchmaking_queue
+    FOR SELECT USING (status = 'waiting');
+
+-- Allow anyone to update a waiting entry to match it
+DROP POLICY IF EXISTS "Anyone can match a waiting player" ON public.matchmaking_queue;
+CREATE POLICY "Anyone can match a waiting player" ON public.matchmaking_queue
+    FOR UPDATE USING (status = 'waiting');
+
+-- Add to Realtime Publication safely
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'matchmaking_queue'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.matchmaking_queue;
+    END IF;
+END $$;
 
 NOTIFY pgrst, 'reload schema';
 
@@ -471,4 +537,103 @@ ON CONFLICT (id) DO NOTHING;
 -- =================================================================
 -- REALTIME SETUP
 -- =================================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE public.game_invitations;
+-- =================================================================
+-- CHAT SYSTEM (NEW)
+-- =================================================================
+
+-- 1. Create game_messages table
+CREATE TABLE IF NOT EXISTS public.game_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID REFERENCES public.active_games(id) ON DELETE CASCADE,
+  sender_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Enable RLS
+ALTER TABLE public.game_messages ENABLE ROW LEVEL SECURITY;
+
+-- 3. RLS Policies
+DROP POLICY IF EXISTS "Players can view messages for their games" ON public.game_messages;
+CREATE POLICY "Players can view messages for their games" ON public.game_messages
+    FOR SELECT TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.active_games 
+            WHERE id = game_id 
+            AND (white_player_id = auth.uid() OR black_player_id = auth.uid())
+        )
+    );
+
+DROP POLICY IF EXISTS "Players can send messages to their games" ON public.game_messages;
+CREATE POLICY "Players can send messages to their games" ON public.game_messages
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        sender_id = auth.uid() AND
+        EXISTS (
+            SELECT 1 FROM public.active_games 
+            WHERE id = game_id 
+            AND (white_player_id = auth.uid() OR black_player_id = auth.uid())
+        )
+    );
+
+-- 4. Add to Realtime Publication safely
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'game_messages'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.game_messages;
+    END IF;
+END $$;
+
+-- =================================================================
+-- TEAM CHAT SYSTEM (NEW)
+-- =================================================================
+
+-- 1. Create team_messages table
+CREATE TABLE IF NOT EXISTS public.team_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID REFERENCES public.teams(id) ON DELETE CASCADE,
+  sender_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Enable Row Level Security
+ALTER TABLE public.team_messages ENABLE ROW LEVEL SECURITY;
+
+-- 3. RLS Policies
+DROP POLICY IF EXISTS "Team members can view messages" ON public.team_messages;
+CREATE POLICY "Team members can view messages" ON public.team_messages
+    FOR SELECT TO authenticated
+    USING (
+        public.check_is_team_member(team_id) OR 
+        public.check_is_team_owner(team_id)
+    );
+
+DROP POLICY IF EXISTS "Team members can send messages" ON public.team_messages;
+CREATE POLICY "Team members can send messages" ON public.team_messages
+    FOR INSERT TO authenticated
+    WITH CHECK (
+        sender_id = auth.uid() AND
+        (public.check_is_team_member(team_id) OR public.check_is_team_owner(team_id))
+    );
+
+-- 4. Add to Realtime Publication safely
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'team_messages'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.team_messages;
+    END IF;
+END $$;
+
+NOTIFY pgrst, 'reload schema';

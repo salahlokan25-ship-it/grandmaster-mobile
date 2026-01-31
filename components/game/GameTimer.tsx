@@ -8,9 +8,10 @@ interface GameTimerProps {
     blackTime: number; // milliseconds
     activeColor: 'white' | 'black';
     onTimeExpired: (color: 'white' | 'black') => void;
+    isPaused?: boolean;
 }
 
-export function GameTimer({ whiteTime, blackTime, activeColor, onTimeExpired }: GameTimerProps) {
+export function GameTimer({ whiteTime, blackTime, activeColor, onTimeExpired, isPaused = false }: GameTimerProps) {
     const [displayWhiteTime, setDisplayWhiteTime] = useState(whiteTime);
     const [displayBlackTime, setDisplayBlackTime] = useState(blackTime);
 
@@ -20,6 +21,8 @@ export function GameTimer({ whiteTime, blackTime, activeColor, onTimeExpired }: 
     }, [whiteTime, blackTime]);
 
     useEffect(() => {
+        if (isPaused) return;
+
         const interval = setInterval(() => {
             if (activeColor === 'white') {
                 setDisplayWhiteTime((prev) => {
@@ -43,7 +46,7 @@ export function GameTimer({ whiteTime, blackTime, activeColor, onTimeExpired }: 
         }, 100);
 
         return () => clearInterval(interval);
-    }, [activeColor, onTimeExpired]);
+    }, [activeColor, onTimeExpired, isPaused]);
 
     const formatTime = (ms: number): string => {
         const totalSeconds = Math.floor(ms / 1000);
